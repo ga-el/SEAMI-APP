@@ -1,5 +1,6 @@
+// components/CompleteProfileForm.jsx
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   SafeAreaView,
   ScrollView,
@@ -8,8 +9,16 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { initializeFirebase } from '../firebase-config';
+import { getDoc, setDoc, doc } from 'firebase/firestore';
+// Inicialización centralizada de Firebase
+const { auth, db } = initializeFirebase();
+
 
 interface SubjectRow {
   subject: string;
@@ -56,6 +65,31 @@ export default function CompleteProfileForm() {
   });
   const [errors, setErrors] = useState<FormErrors>({});
   const [isLoading, setIsLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Verificar si el usuario está autenticado
+  useEffect(() => {
+    const checkAuth = async () => {
+      const user = auth.currentUser;
+      if (!user) {
+        router.replace('/login');
+        return;
+      }
+      
+      // Opcional: cargar datos existentes del perfil si ya existen
+      try {
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        if (userDoc.exists() && userDoc.data().perfilCompleto) {
+          // Si el perfil ya está completo, redirigir al dashboard
+          router.replace('/dashboard');
+        }
+      } catch (error) {
+        console.log("No se pudieron cargar datos del perfil:", error);
+      }
+    };
+
+    checkAuth();
+  }, []);
 
   const handleChange = (name: keyof CompleteProfileForm, value: string) => {
     setForm((prev) => ({ ...prev, [name]: value }));
@@ -84,41 +118,84 @@ export default function CompleteProfileForm() {
   };
 
   const removeSubjectRow = (idx: number) => {
-    setForm((prev) => ({
-      ...prev,
-      subjects: prev.subjects.filter((_, i) => i !== idx),
-    }));
+    if (form.subjects.length > 1) {
+      setForm((prev) => ({
+        ...prev,
+        subjects: prev.subjects.filter((_, i) => i !== idx),
+      }));
+    }
   };
 
   const validate = (): FormErrors => {
     const newErrors: FormErrors = {};
     if (!form.first_name.trim()) newErrors.first_name = 'Por favor ingresa tu nombre.';
+    if (!form.last_name.trim()) newErrors.last_name = 'Por favor ingresa tu apellido paterno.';
     if (!form.semester || Number(form.semester) < 1 || Number(form.semester) > 6)
       newErrors.semester = 'El semestre debe ser entre 1 y 6.';
-    const hasSubject = form.subjects.some(
+    
+    // Validar que al menos una materia tenga ambos campos llenos
+    const hasValidSubject = form.subjects.some(
       (s) => s.subject.trim() && s.teacher.trim()
     );
-    if (!hasSubject) newErrors.subjects = 'Agrega al menos una materia y profesor.';
+    if (!hasValidSubject) newErrors.subjects = 'Agrega al menos una materia y profesor.';
+    
     return newErrors;
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const validation = validate();
     setErrors(validation);
-
+    
     if (Object.keys(validation).length === 0) {
-      setIsLoading(true);
-      setTimeout(() => {
-        setIsLoading(false);
+      setIsSubmitting(true);
+      
+      try {
+        const user = auth.currentUser;
+        if (!user) {
+          throw new Error('Usuario no autenticado');
+        }
+        
+        // Filtrar materias vacías
+        const validSubjects = form.subjects.filter(
+          s => s.subject.trim() && s.teacher.trim()
+        );
+        
+        // Guardar datos en Firestore
+        await setDoc(doc(db, "users", user.uid), {
+          ...form,
+          subjects: validSubjects,
+          perfilCompleto: true,
+          updatedAt: new Date()
+        }, { merge: true }); // merge: true para no sobreescribir otros datos
+        
+        // Redirigir al dashboard
         router.replace('/dashboard');
-      }, 2000);
+      } catch (error) {
+        console.error("Error al completar el perfil:", error);
+        Alert.alert(
+          'Error',
+          'No se pudo completar el perfil. Por favor, intenta de nuevo.',
+          [{ text: 'OK' }]
+        );
+      } finally {
+        setIsSubmitting(false);
+      }
     }
   };
 
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <View style={styles.spinner}></View>
+        <ActivityIndicator size="large" color="#8bc34a" />
+        <Text style={styles.loadingText}>Cargando...</Text>
+      </View>
+    );
+  }
+
+  if (isSubmitting) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#8bc34a" />
         <Text style={styles.loadingText}>¡Perfil completado! Redirigiendo...</Text>
       </View>
     );
@@ -130,7 +207,6 @@ export default function CompleteProfileForm() {
         {/* Header */}
         <View style={[isDarkTheme ? styles.headerDark : styles.headerLight, { paddingTop: insets.top || 16 }]}>
           <Text style={isDarkTheme ? styles.logoDark : styles.logoLight}>SEAMI</Text>
-
           <TouchableOpacity
             style={styles.themeToggle}
             onPress={() => setIsDarkTheme(!isDarkTheme)}
@@ -139,7 +215,6 @@ export default function CompleteProfileForm() {
             <Text style={styles.themeToggleText}>{isDarkTheme ? '🌙' : '☀️'}</Text>
           </TouchableOpacity>
         </View>
-
         {/* Formulario */}
         <View style={isDarkTheme ? styles.formContainerDark : styles.formContainerLight}>
           <Text style={isDarkTheme ? styles.welcomeTextDark : styles.welcomeTextLight}>
@@ -148,7 +223,6 @@ export default function CompleteProfileForm() {
           <Text style={isDarkTheme ? styles.titleDark : styles.titleLight}>
             Completa tu Perfil de Alumno
           </Text>
-
           {/* Nombre completo */}
           <View style={styles.formGroup}>
             <Text style={isDarkTheme ? styles.labelDark : styles.labelLight}>Nombre(s)</Text>
@@ -164,7 +238,6 @@ export default function CompleteProfileForm() {
             />
             {errors.first_name && <Text style={styles.errorText}>{errors.first_name}</Text>}
           </View>
-
           <View style={styles.row}>
             <View style={styles.halfInputGroup}>
               <Text style={isDarkTheme ? styles.labelDark : styles.labelLight}>
@@ -174,11 +247,14 @@ export default function CompleteProfileForm() {
                 placeholder="Apellido Paterno"
                 value={form.last_name}
                 onChangeText={(text) => handleChange('last_name', text)}
-                style={isDarkTheme ? styles.inputDark : styles.inputLight}
+                style={[
+                  isDarkTheme ? styles.inputDark : styles.inputLight,
+                  errors.last_name && styles.inputError,
+                ]}
                 placeholderTextColor={isDarkTheme ? '#aaa' : '#888'}
               />
+              {errors.last_name && <Text style={styles.errorText}>{errors.last_name}</Text>}
             </View>
-
             <View style={styles.halfInputGroup}>
               <Text style={isDarkTheme ? styles.labelDark : styles.labelLight}>
                 Apellido Materno (opcional)
@@ -192,7 +268,6 @@ export default function CompleteProfileForm() {
               />
             </View>
           </View>
-
           <View style={styles.row}>
             <View style={styles.halfInputGroup}>
               <Text style={isDarkTheme ? styles.labelDark : styles.labelLight}>Semestre actual</Text>
@@ -209,7 +284,6 @@ export default function CompleteProfileForm() {
               />
               {errors.semester && <Text style={styles.errorText}>{errors.semester}</Text>}
             </View>
-
             <View style={styles.halfInputGroup}>
               <Text style={isDarkTheme ? styles.labelDark : styles.labelLight}>Fecha de nacimiento</Text>
               <TextInput
@@ -221,7 +295,6 @@ export default function CompleteProfileForm() {
               />
             </View>
           </View>
-
           {/* Materias */}
           <Text style={isDarkTheme ? styles.subtitleDark : styles.subtitleLight}>
             Materias y Profesores Asignados
@@ -229,7 +302,6 @@ export default function CompleteProfileForm() {
           <Text style={isDarkTheme ? styles.subtextDark : styles.subtextLight}>
             Escribe cada materia con su profesor:
           </Text>
-
           <View style={styles.subjectsContainer}>
             {form.subjects.map((row, idx) => (
               <View key={idx} style={styles.subjectRow}>
@@ -237,14 +309,20 @@ export default function CompleteProfileForm() {
                   placeholder={`Materia ${idx + 1}`}
                   value={row.subject}
                   onChangeText={(text) => handleSubjectChange(idx, 'subject', text)}
-                  style={isDarkTheme ? styles.subjectInputDark : styles.subjectInputLight}
+                  style={[
+                    isDarkTheme ? styles.subjectInputDark : styles.subjectInputLight,
+                    errors.subjects && !row.subject.trim() && !row.teacher.trim() && styles.inputError,
+                  ]}
                   placeholderTextColor={isDarkTheme ? '#aaa' : '#888'}
                 />
                 <TextInput
                   placeholder={`Profesor ${idx + 1}`}
                   value={row.teacher}
                   onChangeText={(text) => handleSubjectChange(idx, 'teacher', text)}
-                  style={isDarkTheme ? styles.subjectInputDark : styles.subjectInputLight}
+                  style={[
+                    isDarkTheme ? styles.subjectInputDark : styles.subjectInputLight,
+                    errors.subjects && !row.subject.trim() && !row.teacher.trim() && styles.inputError,
+                  ]}
                   placeholderTextColor={isDarkTheme ? '#aaa' : '#888'}
                 />
                 {form.subjects.length > 1 && (
@@ -259,18 +337,23 @@ export default function CompleteProfileForm() {
             ))}
             {errors.subjects && <Text style={styles.errorText}>{errors.subjects}</Text>}
           </View>
-
           <TouchableOpacity style={styles.addRowBtn} onPress={addSubjectRow}>
             <Text style={styles.addRowText}>+ Agregar materia</Text>
           </TouchableOpacity>
-
           <TouchableOpacity
             style={isDarkTheme ? styles.submitBtnDark : styles.submitBtnLight}
             onPress={handleSubmit}
+            disabled={isSubmitting}
           >
-            <Text style={styles.submitText}>Finalizar Registro</Text>
+            {isSubmitting ? (
+              <>
+                <ActivityIndicator size="small" color="#fff" />
+                <Text style={styles.submitText}> Completando...</Text>
+              </>
+            ) : (
+              <Text style={styles.submitText}>Finalizar Registro</Text>
+            )}
           </TouchableOpacity>
-
           <Text style={isDarkTheme ? styles.textCenterDark : styles.textCenterLight}>
             ¿Ya tienes cuenta?{' '}
             <Text
@@ -542,6 +625,9 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     marginBottom: 20,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
   },
   submitBtnLight: {
     backgroundColor: '#8bc34a',
@@ -549,6 +635,9 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     marginBottom: 20,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
   },
   submitText: {
     color: '#fff',
@@ -585,19 +674,10 @@ const styles = StyleSheet.create({
     padding: 32,
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
   },
-  spinner: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    borderWidth: 4,
-    borderColor: '#8bc34a',
-    borderTopColor: 'transparent',
-    borderRightColor: 'transparent',
-  },
   loadingText: {
     marginTop: 12,
     fontSize: 16,
     fontWeight: '600',
     color: '#8bc34a',
   },
-}); 
+});

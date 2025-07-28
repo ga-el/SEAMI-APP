@@ -1,7 +1,9 @@
+// components/LoginScreen.jsx
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useContext, useState } from 'react';
+import React, { useContext, useEffect, useState } from 'react';
 import {
+  ActivityIndicator, // Para el spinner de carga
   Animated,
   KeyboardAvoidingView,
   Platform,
@@ -15,6 +17,11 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemeContext } from './_layout';
 
+// Importa la inicialización de Firebase centralizada
+import { Auth, signInWithEmailAndPassword } from 'firebase/auth';
+import { doc, Firestore, getDoc } from 'firebase/firestore';
+import { initializeFirebase } from '../firebase-config';
+
 const LoginScreen = () => {
   const { isDarkTheme, toggleTheme } = useContext(ThemeContext);
   const insets = useSafeAreaInsets();
@@ -24,6 +31,28 @@ const LoginScreen = () => {
   const [emailError, setEmailError] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [firebaseError, setFirebaseError] = useState(''); // Para errores de Firebase
+  const [auth, setAuth] = useState<Auth | null>(null);
+  const [db, setDb] = useState<Firestore | null>(null);
+
+  useEffect(() => {
+    if (auth) {
+      const unsubscribe = auth.onAuthStateChanged((user) => {
+        if (user) {
+          router.replace('/dashboard');
+        }
+      });
+      return unsubscribe;
+    }
+  }, [auth]);
+
+  useEffect(() => {
+    (async () => {
+      const firebase = await initializeFirebase();
+      setAuth(firebase.auth);
+      setDb(firebase.db);
+    })();
+  }, []);
 
   const handleEmailChange = (text) => {
     setEmail(text);
@@ -33,6 +62,7 @@ const LoginScreen = () => {
       setEmailError('Por favor, ingresa un correo electrónico válido.');
     } else {
       setEmailError('');
+      setFirebaseError(''); // Limpiar errores de Firebase al escribir
     }
   };
 
@@ -44,6 +74,7 @@ const LoginScreen = () => {
       setPasswordError('La contraseña debe tener al menos 6 caracteres.');
     } else {
       setPasswordError('');
+      setFirebaseError(''); // Limpiar errores de Firebase al escribir
     }
   };
 
@@ -52,9 +83,15 @@ const LoginScreen = () => {
     return emailRegex.test(email);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
+    // Espera a que Firebase esté inicializado
+    if (!auth || !db) {
+      setFirebaseError('La app aún está inicializando. Intenta de nuevo en unos segundos.');
+      return;
+    }
     let isValid = true;
-
+    
+    // Validaciones locales
     if (email.trim() === '') {
       setEmailError('Este campo es requerido.');
       isValid = false;
@@ -62,7 +99,7 @@ const LoginScreen = () => {
       setEmailError('Por favor, ingresa un correo electrónico válido.');
       isValid = false;
     }
-
+    
     if (password.trim() === '') {
       setPasswordError('La contraseña es requerida.');
       isValid = false;
@@ -70,14 +107,59 @@ const LoginScreen = () => {
       setPasswordError('La contraseña debe tener al menos 6 caracteres.');
       isValid = false;
     }
-
+    
     if (isValid) {
       setLoading(true);
-      setTimeout(() => {
+      setFirebaseError(''); // Limpiar errores previos
+      
+      try {
+        // Iniciar sesión con Firebase Authentication
+        const userCredential = await signInWithEmailAndPassword(
+          auth, 
+          email, 
+          password
+        );
+        const user = userCredential.user;
+        
+        // Obtener datos del usuario desde Firestore
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          
+          // Redirigir según el rol y si el perfil está completo
+          if (userData.perfilCompleto) {
+            if (userData.role === 'profesor') {
+              router.replace('/dashboard-teacher');
+            } else {
+              router.replace('/dashboard');
+            }
+          } else {
+            if (userData.role === 'profesor') {
+              router.replace('/complete-profile-teacher');
+            } else {
+              router.replace('/complete-profile');
+            }
+          }
+        } else {
+          // Si no existe el documento, redirigir al registro
+          router.replace('/register');
+        }
+      } catch (error) {
+        console.error("Error al iniciar sesión:", error);
         setLoading(false);
-        // Simular redirección
-        router.replace('/dashboard');
-      }, 2000);
+        
+        // Manejo de errores específicos de Firebase
+        if (error.code === 'auth/user-not-found') {
+          setEmailError('No existe una cuenta con este correo.');
+        } else if (error.code === 'auth/wrong-password') {
+          setPasswordError('Contraseña incorrecta.');
+        } else if (error.code === 'auth/invalid-email') {
+          setEmailError('Correo electrónico inválido.');
+        } else {
+          setFirebaseError('Error al iniciar sesión. Intenta de nuevo.');
+        }
+      }
     }
   };
 
@@ -93,7 +175,7 @@ const LoginScreen = () => {
           <Text style={styles.themeToggleText}>{isDarkTheme ? '🌙' : '☀️'}</Text>
         </TouchableOpacity>
       </View>
-
+      
       {/* Contenido principal */}
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -101,72 +183,94 @@ const LoginScreen = () => {
       >
         <Animated.View style={isDarkTheme ? styles.glassContainerDark : styles.glassContainerLight}>
           <Text style={isDarkTheme ? styles.welcomeTextDark : styles.welcomeTextLight}>¡Bienvenido de nuevo!</Text>
-
+          
+          {/* Mostrar errores generales de Firebase */}
+          {firebaseError ? <Text style={styles.firebaseErrorText}>{firebaseError}</Text> : null}
+          
           <View style={styles.formGroup}>
             <Text style={isDarkTheme ? styles.labelDark : styles.labelLight}>Correo electrónico</Text>
             <View style={styles.inputWrapper}>
               <Text style={styles.icon}>📧</Text>
               <TextInput
-                style={isDarkTheme ? styles.inputDark : styles.inputLight}
+                style={[
+                  isDarkTheme ? styles.inputDark : styles.inputLight,
+                  emailError ? styles.inputError : null
+                ]}
                 placeholder="ejemplo@correo.com"
                 placeholderTextColor={isDarkTheme ? '#aaa' : '#666'}
                 value={email}
                 onChangeText={handleEmailChange}
                 keyboardType="email-address"
                 autoCapitalize="none"
+                editable={!loading} // Deshabilitar durante la carga
               />
             </View>
             {emailError ? <Text style={styles.errorText}>{emailError}</Text> : null}
           </View>
-
+          
           <View style={styles.formGroup}>
             <Text style={isDarkTheme ? styles.labelDark : styles.labelLight}>Contraseña</Text>
             <View style={styles.inputWrapper}>
               <Text style={styles.icon}>🔒</Text>
               <TextInput
-                style={isDarkTheme ? styles.inputDark : styles.inputLight}
+                style={[
+                  isDarkTheme ? styles.inputDark : styles.inputLight,
+                  passwordError ? styles.inputError : null
+                ]}
                 placeholder="••••••••"
                 placeholderTextColor={isDarkTheme ? '#aaa' : '#666'}
                 value={password}
                 onChangeText={handlePasswordChange}
                 secureTextEntry={true}
+                editable={!loading} // Deshabilitar durante la carga
               />
             </View>
             {passwordError ? <Text style={styles.errorText}>{passwordError}</Text> : null}
           </View>
-
+          
           <TouchableOpacity
-            style={isDarkTheme ? styles.submitButtonDark : styles.submitButtonLight}
+            style={[
+              isDarkTheme ? styles.submitButtonDark : styles.submitButtonLight,
+              loading || !auth || !db ? styles.submitButtonDisabled : null
+            ]}
             onPress={handleSubmit}
-            disabled={loading}
+            disabled={loading || !auth || !db}
           >
-            <Text style={styles.buttonText}>
-              {loading ? 'Entrando...' : 'Entrar'}
-            </Text>
-            <Text style={styles.buttonIcon}>→</Text>
+            {loading ? (
+              <>
+                <ActivityIndicator size="small" color="#fff" />
+                <Text style={styles.buttonText}> Entrando...</Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.buttonText}>Entrar</Text>
+                <Text style={styles.buttonIcon}>→</Text>
+              </>
+            )}
           </TouchableOpacity>
-
+          
           <Text style={isDarkTheme ? styles.textCenterDark : styles.textCenterLight}>
             ¿No tienes cuenta?{' '}
             <Text
               style={isDarkTheme ? styles.linkDark : styles.linkLight}
-              onPress={() => router.replace('/register')}
+              onPress={() => !loading && router.replace('/register')} // Evitar navegación durante carga
             >
               Regístrate aquí
             </Text>
           </Text>
+          
+          <Text style={[isDarkTheme ? styles.textCenterDark : styles.textCenterLight, styles.forgotPassword]}>
+            <Text
+              style={isDarkTheme ? styles.linkDark : styles.linkLight}
+              onPress={() => !loading && router.replace('/forgot-password')} // Enlace a recuperación de contraseña
+            >
+              ¿Olvidaste tu contraseña?
+            </Text>
+          </Text>
         </Animated.View>
       </KeyboardAvoidingView>
-
-      {/* Loading screen */}
-      {loading && (
-        <View style={styles.loadingContainer}>
-          <View style={styles.spinner}></View>
-          <Text style={isDarkTheme ? styles.loadingTextDark : styles.loadingTextLight}>
-            Iniciando sesión...
-          </Text>
-        </View>
-      )}
+      
+      {/* Loading screen - Ya no es necesario ya que usamos ActivityIndicator en el botón */}
     </SafeAreaView>
   );
 };
@@ -331,6 +435,9 @@ const styles = StyleSheet.create({
     color: '#1e293b',
     fontSize: 14,
   },
+  inputError: {
+    borderColor: '#ef4444',
+  },
   submitButtonDark: {
     backgroundColor: '#8bc34a',
     padding: 16,
@@ -351,6 +458,9 @@ const styles = StyleSheet.create({
     gap: 8,
     marginVertical: 12,
   },
+  submitButtonDisabled: {
+    opacity: 0.7,
+  },
   buttonText: {
     color: '#fff',
     fontSize: 16,
@@ -370,6 +480,9 @@ const styles = StyleSheet.create({
     marginTop: 16,
     color: '#475569',
   },
+  forgotPassword: {
+    marginTop: 8,
+  },
   linkDark: {
     color: '#8bc34a',
     fontWeight: '500',
@@ -378,6 +491,7 @@ const styles = StyleSheet.create({
     color: '#6aab3b',
     fontWeight: '500',
   },
+  // Estilos para el spinner de carga (ya no se usan)
   loadingContainer: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
@@ -393,7 +507,6 @@ const styles = StyleSheet.create({
     borderColor: '#8bc34a',
     borderTopColor: 'transparent',
     borderRightColor: 'transparent',
-    // No animation keyframes en RN, usar ActivityIndicator si se quiere
   },
   loadingTextDark: {
     color: '#8bc34a',
@@ -412,4 +525,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 4,
   },
-}); 
+  firebaseErrorText: {
+    color: '#ef4444',
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 16,
+    padding: 10,
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderRadius: 8,
+  },
+});

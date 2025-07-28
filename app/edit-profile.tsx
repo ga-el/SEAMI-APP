@@ -1,315 +1,522 @@
-import { Stack, useRouter } from 'expo-router';
-import LottieView from 'lottie-react-native';
-import React, { useContext, useEffect, useRef, useState } from 'react';
+// screens/EditProfileScreen.jsx
+import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import { useRouter } from 'expo-router';
+import React, { useState, useEffect } from 'react';
 import {
-  Dimensions,
-  KeyboardAvoidingView,
-  Platform,
   SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  View
+  View,
+  Alert,
+  ActivityIndicator,
+  Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ThemeContext } from './_layout';
 
-interface FormData {
-  profilePhoto: string;
-  nombre: string;
-  username: string;
-  bio: string;
-  escuela: string;
-  grado: string;
-  materias: string;
-  email: string;
-}
+// Importaciones de Firebase
+import { initializeFirebase } from '../firebase-config'; // <--- Ajusta esta ruta
+import { getAuth, onAuthStateChanged } from 'firebase/auth';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 
-interface Errors {
-  [key: string]: string | undefined;
-}
+// Constantes
+const DEFAULT_PHOTO = 'https://i.pravatar.cc/150?img=32';
 
-export default function EditProfileStudentScreen() {
-  const { isDarkTheme, toggleTheme } = useContext(ThemeContext);
-  const insets = useSafeAreaInsets();
+// Configuración para ocultar la barra superior
+export const options = {
+  headerShown: false,
+};
+
+export default function EditProfileScreen() {
   const router = useRouter();
-  const [showDropdown, setShowDropdown] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showSuccess, setShowSuccess] = useState(false);
-  const lottieRef = useRef<LottieView>(null);
-
-  // Datos simulados del usuario
-  const [formData, setFormData] = useState<FormData>({
-    profilePhoto: 'https://i.pravatar.cc/150?img=32',
-    nombre: 'Ana Sofía Rodríguez',
-    username: 'ana_sofia',
-    bio: 'Estudiante de prepa apasionada por la ciencia y la tecnología. 🚀',
-    escuela: 'Preparatoria No. 5',
-    grado: '5to Semestre',
-    materias: 'Cálculo, Física, Química',
-    email: 'ana.sofia@email.com',
+  const insets = useSafeAreaInsets();
+  const [isDarkTheme, toggleTheme] = useState(true);
+  
+  // Estados de Firebase
+  const [auth, setAuth] = useState(null);
+  const [db, setDb] = useState(null);
+  const [userId, setUserId] = useState(null);
+  
+  // Estados del formulario
+  const [form, setForm] = useState({
+    first_name: '',
+    last_name: '',
+    second_last_name: '',
+    semester: '',
+    birthdate: '',
+    subjects: [{ subject: '', teacher: '' }],
   });
+  
+  // Estados de UI
+  const [profilePhoto, setProfilePhoto] = useState(DEFAULT_PHOTO);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
-  const [errors, setErrors] = useState<Errors>({});
-
-  const handleInputChange = (name: keyof FormData, value: string) => {
-    setFormData(prev => ({ ...prev, [name]: value }));
-    if (errors[name]) {
-      setErrors(prev => ({ ...prev, [name]: undefined }));
-    }
-  };
-
-  const handleSubmit = async () => {
-    setIsSubmitting(true);
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    setIsSubmitting(false);
-    setShowSuccess(true);
-  };
-
-  const handleLottieFinish = () => {
-    router.push('/dashboard');
-  };
-
+  // Inicializar Firebase al cargar el componente
   useEffect(() => {
-    if (showSuccess) {
-      const timeout = setTimeout(() => {
-        router.push('/dashboard');
-      }, 2000);
-      return () => clearTimeout(timeout);
-    }
-  }, [router, showSuccess]);
+    let unsubscribeAuthState: (() => void) | null = null;
 
-  if (showSuccess) {
+    (async () => {
+      try {
+        const firebase = await initializeFirebase();
+        setAuth(firebase.auth);
+        setDb(firebase.db);
+
+        // Configurar listener de auth state
+        unsubscribeAuthState = onAuthStateChanged(firebase.auth, async (user) => {
+          if (!user) {
+            console.log('Usuario no autenticado, redirigiendo a login');
+            router.replace('/login');
+            return;
+          }
+
+          console.log('Usuario autenticado:', user.uid, user.email);
+          setUserId(user.uid);
+          
+          try {
+            setLoading(true);
+            console.log('Intentando cargar datos del usuario desde Firestore...');
+            
+            // Obtener datos del perfil de Firestore
+            const userDocRef = doc(firebase.db, 'users', user.uid);
+            const userDoc = await getDoc(userDocRef);
+            
+            console.log('Documento existe:', userDoc.exists());
+            
+            if (userDoc.exists()) {
+              const data = userDoc.data();
+              console.log('Datos completos cargados desde Firebase:', JSON.stringify(data, null, 2));
+              
+              // Pre-llenar formulario con datos existentes de Firestore
+              const formData = {
+                first_name: data.first_name || data.nombre || '',
+                last_name: data.last_name || data.apellido_paterno || '',
+                second_last_name: data.second_last_name || data.apellido_materno || '',
+                semester: data.semester ? String(data.semester) : (data.semestre ? String(data.semestre) : ''),
+                birthdate: data.birthdate || data.fecha_nacimiento || '',
+                subjects: [] as Array<{subject: string, teacher: string}>
+              };
+              
+              // Manejar materias/subjects
+              if (data.subjects && Array.isArray(data.subjects) && data.subjects.length > 0) {
+                formData.subjects = data.subjects.map(s => ({
+                  subject: s.subject || s.materia || s.nombre || '',
+                  teacher: s.teacher || s.profesor || ''
+                }));
+              } else if (data.materias && Array.isArray(data.materias) && data.materias.length > 0) {
+                formData.subjects = data.materias.map(m => ({
+                  subject: m.nombre || m.materia || '',
+                  teacher: m.profesor || m.teacher || ''
+                }));
+              } else {
+                formData.subjects = [{ subject: '', teacher: '' }];
+              }
+              
+              console.log('Datos del formulario preparados:', formData);
+              setForm(formData);
+              
+              // Pre-llenar foto de perfil
+              const photoUrl = data.avatarUrl || data.photoURL || data.avatar || user.photoURL || DEFAULT_PHOTO;
+              setProfilePhoto(photoUrl);
+              
+              console.log('Formulario actualizado exitosamente');
+            } else {
+              console.log('Documento de usuario no existe en Firestore');
+              // Si no existe documento, usar datos básicos del auth
+              const nameParts = (user.displayName || user.email || '').split(' ');
+              const basicForm = {
+                first_name: nameParts[0] || '',
+                last_name: nameParts[1] || '',
+                second_last_name: nameParts.slice(2).join(' ') || '',
+                semester: '',
+                birthdate: '',
+                subjects: [{ subject: '', teacher: '' }],
+              };
+              
+              console.log('Usando datos básicos:', basicForm);
+              setForm(basicForm);
+              setProfilePhoto(user.photoURL || DEFAULT_PHOTO);
+              
+              // Mostrar alerta informativa
+              Alert.alert(
+                'Perfil Nuevo', 
+                'No se encontraron datos previos. Completa tu perfil para continuar.',
+                [{ text: 'Entendido' }]
+              );
+            }
+          } catch (error) {
+            console.error("Error detallado cargando datos del perfil:", error);
+            Alert.alert('Error', `No se pudieron cargar los datos del perfil: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+            
+            // En caso de error, usar datos básicos
+            const nameParts = (user.displayName || user.email || '').split(' ');
+            setForm({
+              first_name: nameParts[0] || '',
+              last_name: nameParts[1] || '',
+              second_last_name: '',
+              semester: '',
+              birthdate: '',
+              subjects: [{ subject: '', teacher: '' }],
+            });
+            setProfilePhoto(user.photoURL || DEFAULT_PHOTO);
+          } finally {
+            setLoading(false);
+            console.log('Carga de datos completada');
+          }
+        });
+      } catch (error) {
+        console.error("Error inicializando Firebase:", error);
+        Alert.alert('Error', 'Error al inicializar la aplicación.');
+        setLoading(false);
+      }
+    })();
+
+    // Cleanup function
+    return () => {
+      if (unsubscribeAuthState) {
+        unsubscribeAuthState();
+      }
+    };
+  }, []);
+
+  const handleChange = (name: string, value: string) => {
+    setForm(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleSubjectChange = (index: number, field: 'subject' | 'teacher', value: string) => {
+    const updatedSubjects = [...form.subjects];
+    updatedSubjects[index][field] = value;
+    setForm(prev => ({ ...prev, subjects: updatedSubjects }));
+  };
+
+  const addSubjectRow = () => {
+    setForm(prev => ({
+      ...prev,
+      subjects: [...prev.subjects, { subject: '', teacher: '' }]
+    }));
+  };
+
+  const removeSubjectRow = (index: number) => {
+    if (form.subjects.length > 1) {
+      const updatedSubjects = form.subjects.filter((_, i) => i !== index);
+      setForm(prev => ({ ...prev, subjects: updatedSubjects }));
+    }
+  };
+
+  // Función para seleccionar y subir imagen
+  const pickImage = async () => {
+    if (saving) return;
+
+    // Pedir permisos
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permiso denegado', 'Se necesita permiso para acceder a la galería.');
+      return;
+    }
+
+    // Abrir selector de imágenes
+    let result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      const uri = result.assets[0].uri;
+      uploadImage(uri);
+    }
+  };
+
+  // Función para subir imagen a ImgBB
+  const uploadImage = async (uri) => {
+    setSaving(true);
+    
+    try {
+      const response = await fetch(uri);
+      const blob = await response.blob();
+      const formData = new FormData();
+      formData.append('image', blob);
+
+      const responseImgBB = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      const data = await responseImgBB.json();
+
+      if (data.success) {
+        setProfilePhoto(data.data.url);
+      } else {
+        throw new Error(data.error.message || 'Error al subir imagen');
+      }
+    } catch (error) {
+      console.error("Error subiendo imagen:", error);
+      Alert.alert('Error', 'No se pudo subir la imagen. Intenta de nuevo.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Guardar cambios en Firestore
+  const handleSave = async () => {
+    if (!auth || !db || !userId) {
+      Alert.alert('Error', 'La app aún está inicializando.');
+      return;
+    }
+
+    if (!form.first_name.trim() || !form.last_name.trim() || !form.semester.trim() || !form.birthdate.trim()) {
+      Alert.alert('Error', 'Todos los campos marcados son obligatorios.');
+      return;
+    }
+
+    setSaving(true);
+    
+    try {
+      const userRef = doc(db, 'users', userId);
+      
+      // Preparar datos para guardar
+      const updateData = {
+        first_name: form.first_name,
+        last_name: form.last_name,
+        second_last_name: form.second_last_name,
+        semester: form.semester,
+        birthdate: form.birthdate,
+        subjects: form.subjects.filter(s => s.subject.trim() || s.teacher.trim()),
+        avatarUrl: profilePhoto !== DEFAULT_PHOTO ? profilePhoto : null,
+        updatedAt: new Date(),
+      };
+      
+      await updateDoc(userRef, updateData);
+      
+      Alert.alert('Éxito', 'Perfil actualizado correctamente.', [
+        { text: 'OK', onPress: () => router.replace('/profile') }
+      ]);
+    } catch (error) {
+      console.error("Error guardando perfil:", error);
+      Alert.alert('Error', 'No se pudo guardar el perfil. Intenta de nuevo.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
     return (
-      <>
-        <Stack.Screen options={{ headerShown: false }} />
-        <SafeAreaView style={isDarkTheme ? styles.successContainerDark : styles.successContainerLight}>
-          <LottieView
-            ref={lottieRef}
-            source={require('../assets/lottie/success-confetti-green.json')}
-            autoPlay
-            loop={false}
-            style={{ width: 300, height: 300 }}
-            onAnimationFinish={handleLottieFinish}
-          />
-          <Text style={styles.successTitle}>¡Perfil Actualizado!</Text>
-          <Text style={isDarkTheme ? styles.successMessageDark : styles.successMessageLight}>
-            Redirigiendo al dashboard...
+      <View style={[styles.container, isDarkTheme ? styles.containerDark : styles.containerLight]}>
+        <View style={[styles.header, isDarkTheme ? styles.headerDark : styles.headerLight, { paddingTop: insets.top || 16 }]}>
+          <Text style={isDarkTheme ? styles.logoDark : styles.logoLight}>SEAMI</Text>
+          <TouchableOpacity
+            style={styles.themeToggle}
+            onPress={() => toggleTheme(!isDarkTheme)}
+            accessibilityLabel="Cambiar tema"
+          >
+            <Text style={styles.themeToggleText}>{isDarkTheme ? '🌙' : '☀️'}</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={isDarkTheme ? "#8bc34a" : "#6aab3b"} />
+          <Text style={isDarkTheme ? styles.loadingTextDark : styles.loadingTextLight}>
+            Cargando datos del perfil...
           </Text>
-        </SafeAreaView>
-      </>
+          <Text style={[isDarkTheme ? styles.textDark : styles.textLight, { marginTop: 8, fontSize: 14 }]}>
+            Preparando formulario con tus datos actuales
+          </Text>
+        </View>
+      </View>
     );
   }
 
   return (
-    <>
-      <Stack.Screen options={{ headerShown: false }} />
-      <SafeAreaView style={isDarkTheme ? styles.containerDark : styles.containerLight}>
-        {/* Header */}
-        <View style={[styles.header, { paddingTop: insets.top || 16 }]}>
-          <Text style={styles.logo}>SEAMI</Text>
+    <SafeAreaView style={[styles.container, isDarkTheme ? styles.containerDark : styles.containerLight]}>
+      {/* Header */}
+      <View style={[styles.header, isDarkTheme ? styles.headerDark : styles.headerLight, { paddingTop: insets.top || 16 }]}>
+        <TouchableOpacity onPress={() => router.replace('/profile')} style={{ marginRight: 8 }}>
+          <Ionicons name="arrow-back" size={24} color={isDarkTheme ? '#8bc34a' : '#0f172a'} />
+        </TouchableOpacity>
+        <Text style={isDarkTheme ? styles.logoDark : styles.logoLight}>SEAMI</Text>
+        <TouchableOpacity
+          style={styles.themeToggle}
+          onPress={() => toggleTheme(!isDarkTheme)}
+          accessibilityLabel="Cambiar tema"
+        >
+          <Text style={styles.themeToggleText}>{isDarkTheme ? '🌙' : '☀️'}</Text>
+        </TouchableOpacity>
+      </View>
 
-          <View style={styles.actions}>
-            {/* Botón tema oscuro/claro */}
-            <TouchableOpacity onPress={toggleTheme} style={styles.themeToggle}>
-              <Text style={styles.themeToggleText}>{isDarkTheme ? '🌙' : '☀️'}</Text>
-            </TouchableOpacity>
-
-            {/* Menú de perfil */}
-            <TouchableOpacity onPress={() => setShowDropdown(!showDropdown)} style={styles.profileBtn}>
-              <Text style={styles.profileIcon}>👤</Text>
-            </TouchableOpacity>
-
-            {/* Dropdown menu */}
-            {showDropdown && (
-              <View style={styles.dropdown}>
-                <TouchableOpacity
-                  style={styles.dropdownItem}
-                  onPress={() => router.push('/profile')}
-                >
-                  <Text style={styles.dropdownItemText}>Ver Perfil</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.dropdownItem}
-                  onPress={() => router.push('/edit-profile')}
-                >
-                  <Text style={styles.dropdownItemText}>Editar Perfil</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.dropdownItem}
-                  onPress={() => router.replace('/login')}
-                >
-                  <Text style={styles.dropdownItemText}>Cerrar Sesión</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
-        </View>
-
-        {/* Contenido principal */}
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.formContainer}>
-          <ScrollView contentContainerStyle={styles.scrollContent}>
-            {/* Header del formulario */}
-            <View style={styles.formHeader}>
-              <Text style={styles.title}>Editar Perfil</Text>
-              <Text style={isDarkTheme ? styles.subtitleDark : styles.subtitleLight}>
-                Personaliza tu perfil de estudiante
-              </Text>
-            </View>
-
-            {/* Sección de foto de perfil */}
-            <View style={isDarkTheme ? styles.sectionDark : styles.sectionLight}>
-              <View style={styles.profileSection}>
-                <View style={styles.profilePicContainer}>
-                  <View style={styles.profilePic} />
-                  <View style={styles.profilePicOverlay}>
-                    <Text style={styles.changePicButton}>📷</Text>
-                  </View>
-                </View>
-              </View>
-            </View>
-
-            {/* Sección de información básica */}
-            <View style={isDarkTheme ? styles.sectionDark : styles.sectionLight}>
-              <Text style={styles.sectionTitle}>Información Básica</Text>
-              <View style={styles.formGrid}>
-                <View style={styles.formGroup}>
-                  <Text style={isDarkTheme ? styles.labelDark : styles.labelLight}>Nombre Completo</Text>
-                  <TextInput
-                    value={formData.nombre}
-                    onChangeText={(text) => handleInputChange('nombre', text)}
-                    style={isDarkTheme ? styles.inputDark : styles.inputLight}
-                    placeholder="Tu nombre completo"
-                    placeholderTextColor={isDarkTheme ? '#aaa' : '#666'}
-                  />
-                </View>
-                <View style={styles.formGroup}>
-                  <Text style={isDarkTheme ? styles.labelDark : styles.labelLight}>Username</Text>
-                  <TextInput
-                    value={formData.username}
-                    onChangeText={(text) => handleInputChange('username', text)}
-                    style={isDarkTheme ? styles.inputDark : styles.inputLight}
-                    placeholder="Tu nombre de usuario"
-                    placeholderTextColor={isDarkTheme ? '#aaa' : '#666'}
-                  />
-                </View>
-              </View>
-            </View>
-
-            {/* Sección sobre mí */}
-            <View style={isDarkTheme ? styles.sectionDark : styles.sectionLight}>
-              <Text style={styles.sectionTitle}>Sobre mí</Text>
-              <View style={styles.formGroup}>
-                <Text style={isDarkTheme ? styles.labelDark : styles.labelLight}>Biografía</Text>
-                <TextInput
-                  value={formData.bio}
-                  onChangeText={(text) => handleInputChange('bio', text)}
-                  style={[isDarkTheme ? styles.textareaDark : styles.textareaLight, { height: 100 }]}
-                  placeholder="Cuéntanos algo sobre ti, tus intereses y metas..."
-                  placeholderTextColor={isDarkTheme ? '#aaa' : '#666'}
-                  multiline
-                  numberOfLines={3}
+      {/* Contenido Principal */}
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        <View style={[styles.formContainer, isDarkTheme ? styles.formContainerDark : styles.formContainerLight]}>
+          
+          {/* Avatar */}
+          <View style={styles.avatarSection}>
+            <TouchableOpacity onPress={pickImage} activeOpacity={0.8}>
+              <View style={styles.avatarContainer}>
+                <Image 
+                  source={{ uri: profilePhoto }} 
+                  style={styles.avatarImage}
+                  resizeMode="cover"
                 />
-              </View>
-            </View>
-
-            {/* Sección de información académica */}
-            <View style={isDarkTheme ? styles.sectionDark : styles.sectionLight}>
-              <Text style={styles.sectionTitle}>Información Académica</Text>
-              <View style={styles.formGrid}>
-                <View style={styles.formGroup}>
-                  <Text style={isDarkTheme ? styles.labelDark : styles.labelLight}>Escuela</Text>
-                  <TextInput
-                    value={formData.escuela}
-                    onChangeText={(text) => handleInputChange('escuela', text)}
-                    style={isDarkTheme ? styles.inputDark : styles.inputLight}
-                    placeholder="Nombre de tu escuela"
-                    placeholderTextColor={isDarkTheme ? '#aaa' : '#666'}
-                  />
-                </View>
-                <View style={styles.formGroup}>
-                  <Text style={isDarkTheme ? styles.labelDark : styles.labelLight}>Grado/Semestre</Text>
-                  <TextInput
-                    value={formData.grado}
-                    onChangeText={(text) => handleInputChange('grado', text)}
-                    style={isDarkTheme ? styles.inputDark : styles.inputLight}
-                    placeholder="Ej: 5to Semestre"
-                    placeholderTextColor={isDarkTheme ? '#aaa' : '#666'}
-                  />
-                </View>
-                <View style={styles.formGroup}>
-                  <Text style={isDarkTheme ? styles.labelDark : styles.labelLight}>Materias de Interés</Text>
-                  <TextInput
-                    value={formData.materias}
-                    onChangeText={(text) => handleInputChange('materias', text)}
-                    style={isDarkTheme ? styles.inputDark : styles.inputLight}
-                    placeholder="Cálculo, Física, etc."
-                    placeholderTextColor={isDarkTheme ? '#aaa' : '#666'}
-                  />
+                <View style={styles.cameraButton}>
+                  <Text style={styles.cameraIcon}>📷</Text>
                 </View>
               </View>
-            </View>
+            </TouchableOpacity>
+            <Text style={[styles.imagePreviewText, isDarkTheme ? styles.textDark : styles.textLight]}>
+              Haz clic en la imagen para cambiarla
+            </Text>
+          </View>
 
-            {/* Acciones del formulario */}
-            <View style={styles.formActions}>
-              <TouchableOpacity
-                style={isDarkTheme ? styles.cancelButtonDark : styles.cancelButtonLight}
-                onPress={() => router.back()}
-              >
-                <Text style={isDarkTheme ? styles.cancelButtonTextDark : styles.cancelButtonTextLight}>
-                  Cancelar
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.submitButton}
-                onPress={handleSubmit}
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? (
-                  <>
-                    <View style={styles.spinner} />
-                    <Text style={styles.submitButtonText}>Guardando...</Text>
-                  </>
-                ) : (
-                  <Text style={styles.submitButtonText}>Guardar Cambios</Text>
+          {/* Formulario */}
+          <View style={styles.formGroup}>
+            <Text style={[styles.label, isDarkTheme ? styles.labelDark : styles.labelLight]}>
+              Nombre(s)
+            </Text>
+            <TextInput
+              style={[styles.input, isDarkTheme ? styles.inputDark : styles.inputLight]}
+              value={form.first_name}
+              onChangeText={(text) => handleChange('first_name', text)}
+              placeholder="Nombre(s)"
+              placeholderTextColor={isDarkTheme ? '#aaa' : '#666'}
+            />
+          </View>
+
+          <View style={styles.nameRow}>
+            <View style={styles.halfInputGroup}>
+              <Text style={[styles.label, isDarkTheme ? styles.labelDark : styles.labelLight]}>
+                Apellido Paterno
+              </Text>
+              <TextInput
+                style={[styles.input, isDarkTheme ? styles.inputDark : styles.inputLight]}
+                value={form.last_name}
+                onChangeText={(text) => handleChange('last_name', text)}
+                placeholder="Apellido Paterno"
+                placeholderTextColor={isDarkTheme ? '#aaa' : '#666'}
+              />
+            </View>
+            
+            <View style={styles.halfInputGroup}>
+              <Text style={[styles.label, isDarkTheme ? styles.labelDark : styles.labelLight]}>
+                Apellido Materno
+              </Text>
+              <TextInput
+                style={[styles.input, isDarkTheme ? styles.inputDark : styles.inputLight]}
+                value={form.second_last_name}
+                onChangeText={(text) => handleChange('second_last_name', text)}
+                placeholder="Apellido Materno"
+                placeholderTextColor={isDarkTheme ? '#aaa' : '#666'}
+              />
+            </View>
+          </View>
+
+          <View style={styles.formGroup}>
+            <Text style={[styles.label, isDarkTheme ? styles.labelDark : styles.labelLight]}>
+              Fecha de nacimiento
+            </Text>
+            <TextInput
+              style={[styles.input, isDarkTheme ? styles.inputDark : styles.inputLight]}
+              value={form.birthdate}
+              onChangeText={(text) => handleChange('birthdate', text)}
+              placeholder="DD/MM/AAAA"
+              placeholderTextColor={isDarkTheme ? '#aaa' : '#666'}
+            />
+          </View>
+
+          <View style={styles.formGroup}>
+            <Text style={[styles.label, isDarkTheme ? styles.labelDark : styles.labelLight]}>
+              Semestre actual
+            </Text>
+            <TextInput
+              style={[styles.input, isDarkTheme ? styles.inputDark : styles.inputLight]}
+              value={form.semester}
+              onChangeText={(text) => handleChange('semester', text)}
+              placeholder="Ej. 3"
+              keyboardType="numeric"
+              maxLength={2}
+              placeholderTextColor={isDarkTheme ? '#aaa' : '#666'}
+            />
+          </View>
+
+          {/* Materias (solo para alumnos en este ejemplo) */}
+          <View style={styles.formGroup}>
+            <Text style={[styles.label, isDarkTheme ? styles.labelDark : styles.labelLight]}>
+              Materias y Profesores
+            </Text>
+            
+            {form.subjects.map((subject, index) => (
+              <View key={index} style={styles.subjectRow}>
+                <View style={styles.subjectInputs}>
+                  <TextInput
+                    style={[styles.subjectInput, isDarkTheme ? styles.inputDark : styles.inputLight]}
+                    value={subject.subject}
+                    onChangeText={(text) => handleSubjectChange(index, 'subject', text)}
+                    placeholder="Materia"
+                    placeholderTextColor={isDarkTheme ? '#aaa' : '#666'}
+                  />
+                  <TextInput
+                    style={[styles.subjectInput, isDarkTheme ? styles.inputDark : styles.inputLight]}
+                    value={subject.teacher}
+                    onChangeText={(text) => handleSubjectChange(index, 'teacher', text)}
+                    placeholder="Profesor"
+                    placeholderTextColor={isDarkTheme ? '#aaa' : '#666'}
+                  />
+                </View>
+                
+                {form.subjects.length > 1 && (
+                  <TouchableOpacity 
+                    style={styles.removeButton}
+                    onPress={() => removeSubjectRow(index)}
+                  >
+                    <Text style={styles.removeIcon}>🗑️</Text>
+                  </TouchableOpacity>
                 )}
-              </TouchableOpacity>
-            </View>
-          </ScrollView>
-        </KeyboardAvoidingView>
-      </SafeAreaView>
-    </>
+              </View>
+            ))}
+            
+            <TouchableOpacity 
+              style={styles.addButton}
+              onPress={addSubjectRow}
+            >
+              <Text style={styles.addButtonText}>+ Agregar materia</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Botón de guardar */}
+          <TouchableOpacity
+            style={[styles.saveButton, isDarkTheme ? styles.saveButtonDark : styles.saveButtonLight, saving && styles.saveButtonDisabled]}
+            onPress={handleSave}
+            disabled={saving}
+          >
+            {saving ? (
+              <>
+                <ActivityIndicator size="small" color="#fff" />
+                <Text style={styles.saveButtonText}> Guardando...</Text>
+              </>
+            ) : (
+              <Text style={styles.saveButtonText}>Guardar Cambios</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
-const { width, height } = Dimensions.get('window');
-
 const styles = StyleSheet.create({
-  // Containers
-  containerDark: {
+  container: {
     flex: 1,
+  },
+  containerDark: {
     backgroundColor: '#0f172a',
   },
   containerLight: {
-    flex: 1,
     backgroundColor: '#f5f7fa',
   },
-  successContainerDark: {
-    flex: 1,
-    backgroundColor: '#0f172a',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  successContainerLight: {
-    flex: 1,
-    backgroundColor: '#f5f7fa',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  // Header
   header: {
     position: 'absolute',
     top: 0,
@@ -319,25 +526,33 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: 16,
     paddingBottom: 16,
+  },
+  headerDark: {
     backgroundColor: 'rgba(15, 23, 42, 0.9)',
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(139, 195, 74, 0.2)',
   },
-  logo: {
-    fontSize: 24,
+  headerLight: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 0, 0, 0.05)',
+  },
+  logoDark: {
+    fontSize: 20,
     fontWeight: 'bold',
     color: '#8bc34a',
     textShadowColor: 'rgba(139, 195, 74, 0.3)',
     textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 8,
+    textShadowRadius: 4,
   },
-  actions: {
-    flexDirection: 'row',
-    gap: 12,
-    alignItems: 'center',
-    position: 'relative',
+  logoLight: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#6aab3b',
+    textShadowColor: 'rgba(139, 195, 74, 0.2)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   themeToggle: {
     backgroundColor: 'rgba(139, 195, 74, 0.1)',
@@ -351,279 +566,193 @@ const styles = StyleSheet.create({
   themeToggleText: {
     fontSize: 20,
   },
-  profileBtn: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  profileIcon: {
-    fontSize: 20,
-  },
-  dropdown: {
-    position: 'absolute',
-    right: 0,
-    top: 45,
-    minWidth: 150,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
-    shadowColor: '#000',
-    shadowOpacity: 0.3,
-    elevation: 4,
-    zIndex: 1000,
-  },
-  dropdownItem: {
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-  },
-  dropdownItemText: {
-    color: '#fff',
-    fontSize: 14,
-  },
-
-  // Form Container
-  formContainer: {
-    flex: 1,
-  },
   scrollContent: {
     flexGrow: 1,
-    paddingTop: 80,
+    paddingTop: 100, // Espacio para el header fijo
     paddingBottom: 20,
   },
-
-  // Form Header
-  formHeader: {
-    alignItems: 'center',
-    marginBottom: 24,
-    paddingHorizontal: 16,
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: '#8bc34a',
-    marginBottom: 8,
-  },
-  subtitleDark: {
-    fontSize: 16,
-    color: 'rgba(255, 255, 255, 0.7)',
-    fontWeight: '400',
-  },
-  subtitleLight: {
-    fontSize: 16,
-    color: 'rgba(0, 0, 0, 0.7)',
-    fontWeight: '400',
-  },
-
-  // Sections
-  sectionDark: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 16,
+  formContainer: {
+    maxWidth: 500,
+    width: '100%',
+    alignSelf: 'center',
+    borderRadius: 24,
     padding: 24,
     marginHorizontal: 16,
-    marginBottom: 16,
+  },
+  formContainerDark: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderColor: 'rgba(139, 195, 74, 0.3)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
     shadowColor: '#000',
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.35,
+    shadowRadius: 32,
     elevation: 8,
   },
-  sectionLight: {
+  formContainerLight: {
     backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    borderRadius: 16,
-    padding: 24,
-    marginHorizontal: 16,
-    marginBottom: 16,
-    borderWidth: 1,
     borderColor: 'rgba(0, 0, 0, 0.1)',
+    borderWidth: 1,
     shadowColor: '#000',
     shadowOpacity: 0.1,
+    shadowRadius: 16,
     elevation: 4,
   },
-
-  // Profile Section
-  profileSection: {
+  avatarSection: {
     alignItems: 'center',
+    marginBottom: 24,
   },
-  profilePicContainer: {
+  avatarContainer: {
     position: 'relative',
-  },
-  profilePic: {
     width: 120,
     height: 120,
+    marginBottom: 12,
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
     borderRadius: 60,
-    backgroundColor: '#8bc34a',
-    borderWidth: 4,
+    borderWidth: 3,
     borderColor: '#8bc34a',
   },
-  profilePicOverlay: {
+  cameraButton: {
     position: 'absolute',
     bottom: 0,
     right: 0,
     backgroundColor: '#8bc34a',
-    borderRadius: 20,
+    borderRadius: 22.5,
+    width: 45,
+    height: 45,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  cameraIcon: {
+    fontSize: 20,
+    color: 'white',
+  },
+  imagePreviewText: {
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  textDark: {
+    color: 'rgba(255, 255, 255, 0.7)',
+  },
+  textLight: {
+    color: 'rgba(45, 55, 72, 0.7)',
+  },
+  formGroup: {
+    marginBottom: 16,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  labelDark: {
+    color: '#cbd5e1',
+  },
+  labelLight: {
+    color: '#475569',
+  },
+  input: {
+    height: 50,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    fontSize: 16,
+  },
+  inputDark: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderWidth: 2,
+    color: '#fff',
+  },
+  inputLight: {
+    backgroundColor: 'rgba(0, 0, 0, 0.03)',
+    borderColor: 'rgba(0, 0, 0, 0.1)',
+    borderWidth: 1,
+    color: '#2d3748',
+  },
+  nameRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  halfInputGroup: {
+    flex: 1,
+  },
+  subjectRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  subjectInputs: {
+    flex: 1,
+    marginRight: 8,
+  },
+  subjectInput: {
+    height: 45,
+    marginBottom: 8,
+  },
+  removeButton: {
     width: 40,
     height: 40,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  changePicButton: {
+  removeIcon: {
     fontSize: 20,
-    color: 'white',
   },
-
-  // Section Title
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: '600',
+  addButton: {
+    marginTop: 8,
+    padding: 12,
+    alignItems: 'center',
+  },
+  addButtonText: {
     color: '#8bc34a',
-    marginBottom: 16,
-  },
-
-  // Form Grid
-  formGrid: {
-    gap: 16,
-  },
-  formGroup: {
-    marginBottom: 16,
-  },
-
-  // Labels
-  labelDark: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: 'rgba(255, 255, 255, 0.9)',
-    marginBottom: 8,
-  },
-  labelLight: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: 'rgba(0, 0, 0, 0.8)',
-    marginBottom: 8,
-  },
-
-  // Inputs
-  inputDark: {
-    padding: 14,
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    color: 'white',
+    fontWeight: '600',
     fontSize: 16,
   },
-  inputLight: {
-    padding: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.1)',
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    color: '#1e293b',
-    fontSize: 16,
-  },
-  textareaDark: {
-    padding: 14,
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    color: 'white',
-    fontSize: 16,
-    textAlignVertical: 'top',
-  },
-  textareaLight: {
-    padding: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.1)',
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    color: '#1e293b',
-    fontSize: 16,
-    textAlignVertical: 'top',
-  },
-
-  // Form Actions
-  formActions: {
+  saveButton: {
     flexDirection: 'row',
-    gap: 16,
+    alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 24,
-    paddingHorizontal: 16,
-  },
-  cancelButtonDark: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-    paddingVertical: 14,
-    paddingHorizontal: 24,
+    paddingVertical: 16,
     borderRadius: 12,
-    flex: 1,
-    alignItems: 'center',
+    marginTop: 20,
   },
-  cancelButtonLight: {
-    backgroundColor: 'rgba(0, 0, 0, 0.05)',
-    borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.1)',
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-    flex: 1,
-    alignItems: 'center',
-  },
-  cancelButtonTextDark: {
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  cancelButtonTextLight: {
-    color: 'rgba(0, 0, 0, 0.7)',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  submitButton: {
+  saveButtonDark: {
     backgroundColor: '#8bc34a',
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-    flex: 1,
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 8,
   },
-  submitButtonText: {
-    color: 'white',
+  saveButtonLight: {
+    backgroundColor: '#6aab3b',
+  },
+  saveButtonDisabled: {
+    opacity: 0.7,
+  },
+  saveButtonText: {
+    color: '#fff',
     fontSize: 16,
     fontWeight: '600',
   },
-  spinner: {
-    width: 16,
-    height: 16,
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
-    borderTopColor: 'white',
-    borderRadius: 8,
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingTop: 120,
   },
-
-  // Success Animation Styles
-  successTitle: {
-    fontSize: 32,
-    fontWeight: '700',
+  loadingTextDark: {
+    marginTop: 12,
     color: '#8bc34a',
-    marginBottom: 16,
-    textAlign: 'center',
+    fontSize: 16,
+    fontWeight: '600',
   },
-  successMessageDark: {
-    fontSize: 18,
-    color: 'rgba(255, 255, 255, 0.9)',
-    marginBottom: 32,
-    textAlign: 'center',
+  loadingTextLight: {
+    marginTop: 12,
+    color: '#6aab3b',
+    fontSize: 16,
+    fontWeight: '600',
   },
-  successMessageLight: {
-    fontSize: 18,
-    color: 'rgba(0, 0, 0, 0.8)',
-    marginBottom: 32,
-    textAlign: 'center',
-  },
-}); 
+});
