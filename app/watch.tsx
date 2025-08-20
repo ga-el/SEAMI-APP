@@ -1,413 +1,482 @@
-import React, { useEffect, useState, useRef, useContext } from 'react';
-import { View, Text, ActivityIndicator, TouchableOpacity, StyleSheet, ScrollView, Image, SafeAreaView, Platform } from 'react-native';
-import { Video } from 'expo-av';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { doc, getDoc, updateDoc, collection, query, getDocs, increment } from 'firebase/firestore';
-import { db } from '../firebase-config';
+import { Video } from 'expo-av';
+import { collection, doc, getDoc, getDocs, increment, query, updateDoc } from 'firebase/firestore';
+import React, { useContext, useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Dimensions,
+  Image,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+// Asumo que tu configuración de firebase está en '../firebase-config'
 import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { db } from '../firebase-config';
 import { ThemeContext } from './_layout';
 
+// --- Componente Principal del Reproductor ---
 export default function WatchScreen() {
   const navigation = useNavigation();
   const route = useRoute<any>();
-  const insets = useSafeAreaInsets();
-  const { isDarkTheme, toggleTheme } = useContext(ThemeContext);
+  const { isDarkTheme } = useContext(ThemeContext);
+
   const videoId = route.params?.id;
+  
+  // --- Estados del Componente ---
   const [videoData, setVideoData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [recs, setRecs] = useState<any[]>([]);
+  const [recommendations, setRecommendations] = useState<any[]>([]);
   const videoRef = useRef<Video>(null);
 
+  // --- Efecto para Cargar los Datos del Video ---
   useEffect(() => {
-    console.log('[WATCH] videoId recibido:', videoId);
     if (!videoId) {
-      setError('No video ID provisto.');
+      setError('No se proporcionó un ID de video.');
       setLoading(false);
       return;
     }
-    const fetchVideo = async () => {
+
+    const fetchVideoData = async () => {
+      setLoading(true);
+      setError('');
+      setVideoData(null);
       try {
         const docRef = doc(db, 'videos', videoId);
         const docSnap = await getDoc(docRef);
+
         if (docSnap.exists()) {
           const data = docSnap.data();
-          console.log('[WATCH] Documento Firestore:', data);
           setVideoData({ id: docSnap.id, ...data });
-          // Incrementar vistas
+          // Incrementar las vistas del video en Firestore
           await updateDoc(docRef, { views: increment(1) });
         } else {
           setError(`Video no encontrado (ID: ${videoId})`);
         }
       } catch (e: any) {
-        console.error('[WATCH] Error Firestore:', e);
-        setError('Error cargando el video: ' + (e?.message || String(e)));
+        console.error('[WATCH] Error al cargar video:', e);
+        setError('No se pudo cargar el video. Inténtalo de nuevo.');
       } finally {
         setLoading(false);
       }
     };
-    fetchVideo();
-  }, [videoId]);
 
+    fetchVideoData();
+  }, [videoId]); // Se ejecuta cada vez que el videoId cambia
+
+  // --- Efecto para Cargar Videos Recomendados ---
   useEffect(() => {
-    // Cargar recomendaciones (otros videos)
-    const fetchRecs = async () => {
+    if (!videoId) return;
+
+    const fetchRecommendations = async () => {
       try {
         const q = query(collection(db, 'videos'));
         const querySnap = await getDocs(q);
-        const others = querySnap.docs
-          .filter(docu => docu.id !== videoId)
+        const otherVideos = querySnap.docs
+          .filter(docu => docu.id !== videoId) // Excluir el video actual
           .map(docu => ({ id: docu.id, ...docu.data() }));
-        setRecs(others.slice(0, 4));
-      } catch {}
+        setRecommendations(otherVideos.slice(0, 5)); // Limitar a 5 recomendaciones
+      } catch (e) {
+        console.error("Error al cargar recomendaciones:", e);
+      }
     };
-    if (videoId) fetchRecs();
-  }, [videoId]);
 
+    fetchRecommendations();
+  }, [videoId]);
+  
+  // --- Función para dar "Me Gusta" ---
+  const handleLike = async () => {
+      if (!videoData) return;
+      const docRef = doc(db, 'videos', videoId);
+      // Actualiza el estado local inmediatamente para una respuesta visual rápida
+      setVideoData((prev: any) => ({...prev, likes: (prev.likes || 0) + 1}));
+      // Actualiza en Firestore
+      await updateDoc(docRef, {
+          likes: increment(1)
+      });
+  };
+
+  // --- Función para dar "No Me Gusta" ---
+  const handleDislike = async () => {
+      if (!videoData) return;
+      const docRef = doc(db, 'videos', videoId);
+      // Actualiza el estado local inmediatamente para una respuesta visual rápida
+      setVideoData((prev: any) => ({...prev, dislikes: (prev.dislikes || 0) + 1}));
+      // Actualiza en Firestore
+      await updateDoc(docRef, {
+          dislikes: increment(1)
+      });
+  };
+
+  // --- Renderizado Condicional: Carga, Error y Contenido ---
   if (loading) {
     return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}> 
+      <View style={[styles.centeredContainer, isDarkTheme ? styles.containerDark : styles.containerLight]}>
         <ActivityIndicator size="large" color="#8bc34a" />
-        <Text style={{ color: isDarkTheme ? '#e2e8f0' : '#222', marginTop: 10 }}>Cargando video...</Text>
+        <Text style={[styles.loadingText, isDarkTheme ? styles.loadingTextDark : styles.loadingTextLight]}>Cargando...</Text>
       </View>
     );
   }
+
   if (error) {
     return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}> 
-        <Text style={{ color: 'red', fontSize: 16, textAlign: 'center' }}>{error}</Text>
+      <View style={[styles.centeredContainer, isDarkTheme ? styles.containerDark : styles.containerLight]}>
+        <Ionicons name="alert-circle-outline" size={48} color="red" />
+        <Text style={styles.errorText}>{error}</Text>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+            <Text style={styles.backButtonText}>Regresar</Text>
+        </TouchableOpacity>
       </View>
     );
   }
+
   if (!videoData) return null;
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: isDarkTheme ? '#11151b' : '#f5f7fa' }]}> 
-      {/* Header con gradiente y logo */}
-      <View style={[styles.header, { paddingTop: insets.top || 16 }]}> 
-        <View style={styles.headerBg} />
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBackBtn}>
-          <Ionicons name="chevron-back" size={26} color={isDarkTheme ? '#8bc34a' : '#0f172a'} />
-        </TouchableOpacity>
-        <View style={styles.headerCenter}>
-          <Text style={isDarkTheme ? styles.logoDark : styles.logoLight}>SEAMI</Text>
-        </View>
-        <TouchableOpacity
-          style={styles.themeToggle}
-          onPress={toggleTheme}
-          accessibilityLabel="Cambiar tema"
-        >
-          <Text style={styles.themeToggleText}>{isDarkTheme ? '🌙' : '☀️'}</Text>
+    <SafeAreaView style={[styles.flexContainer, isDarkTheme ? styles.containerDark : styles.containerLight]}>
+      {/* --- REPRODUCTOR DE VIDEO --- */}
+      {/* Ocupa todo el ancho y tiene una altura de aspecto 16:9 */}
+      <View style={styles.videoPlayerContainer}>
+        <Video
+          ref={videoRef}
+          source={{ uri: videoData.videoUrl }}
+          useNativeControls
+          resizeMode="contain" // Clave para que videos verticales y horizontales se vean bien
+          style={styles.videoPlayer}
+          posterSource={{ 
+            uri: videoData.thumbnailUrl || 'https://via.placeholder.com/320x180/2a2742/8bc34a?text=SEAMI+Video' 
+          }}
+          posterStyle={styles.videoPoster}
+        />
+        {/* Botón para regresar, superpuesto en el video */}
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.goBackButton}>
+            <Ionicons name="arrow-back" size={24} color="white" />
         </TouchableOpacity>
       </View>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Video Player */}
-        <View style={styles.videoShadowWrap}>
-          <View style={styles.videoContainer}>
-            <Video
-              ref={videoRef}
-              source={{ uri: videoData.videoUrl }}
-              useNativeControls
-              resizeMode="contain"
-              style={styles.videoPlayer}
-              posterSource={videoData.thumbnail ? { uri: videoData.thumbnail } : undefined}
-              posterStyle={{ resizeMode: 'cover' }}
-            />
+
+      <ScrollView style={styles.flexContainer}>
+        <View style={styles.contentPadding}>
+          {/* --- INFORMACIÓN DEL VIDEO --- */}
+          <Text style={[styles.videoTitle, isDarkTheme ? styles.videoTitleDark : styles.videoTitleLight]}>{videoData.title}</Text>
+          <View style={styles.metadataRow}>
+            <Text style={isDarkTheme ? styles.videoInstructorDark : styles.videoInstructorLight}>{videoData.author || 'Anónimo'}</Text>
+            <Text style={isDarkTheme ? styles.videoInstructorDark : styles.videoInstructorLight}>•</Text>
+            <Text style={isDarkTheme ? styles.videoViewsDark : styles.videoViewsLight}>{videoData.views || 0} vistas</Text>
           </View>
-        </View>
-        {/* Video Metadata */}
-        <View style={[styles.metaBox, isDarkTheme ? styles.videoInfoDark : styles.videoInfoLight]}>
-          <Text style={[styles.title, isDarkTheme ? styles.videoTitleDark : styles.videoTitleLight]}>{videoData.title}</Text>
-          <View style={styles.videoMetaRow}>
-            <View style={styles.badgeInstructor}>
-              <Ionicons name="person-circle" size={18} color="#8bc34a" style={{ marginRight: 3 }} />
-              <Text style={[styles.badgeText, isDarkTheme ? styles.badgeTextDark : styles.badgeTextLight]}>{videoData.author || 'Desconocido'}</Text>
-            </View>
-            <View style={styles.badgeViews}>
-              <Ionicons name="eye" size={16} color={isDarkTheme ? '#e2e8f0' : '#5c5c5c'} style={{ marginRight: 2 }} />
-              <Text style={[styles.badgeText, isDarkTheme ? styles.badgeTextDark : styles.badgeTextLight]}>{videoData.views || 0} vistas</Text>
-            </View>
-          </View>
-          <Text style={[styles.desc, isDarkTheme ? styles.videoDescriptionDark : styles.videoDescriptionLight]}>{videoData.description}</Text>
-        </View>
-        {/* Recomendaciones */}
-        <Text style={[styles.recsTitle, { marginLeft: 16 }]}>{'Recomendados'}</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.recsScroll}>
-          {recs.map(rec => (
-            <TouchableOpacity
-              key={rec.id}
-              style={styles.recCard}
-              onPress={() => navigation.navigate('Watch', { id: rec.id })}
-              activeOpacity={0.85}
-            >
-              <View style={styles.recThumbShadow}>
-                {rec.thumbnail ? (
-                  <Image source={{ uri: rec.thumbnail }} style={styles.recThumbRound} />
-                ) : (
-                  <View style={[styles.recThumbRound, { backgroundColor: '#e2e8f0', justifyContent: 'center', alignItems: 'center' }]}> 
-                    <Ionicons name="image" size={32} color="#8bc34a" />
-                  </View>
-                )}
-              </View>
-              <Text numberOfLines={2} style={styles.recTitle}>{rec.title}</Text>
+          <Text style={[styles.videoDescription, isDarkTheme ? styles.videoInstructorDark : styles.videoInstructorLight]}>
+            {videoData.description}
+          </Text>
+
+          {/* --- BARRA DE ACCIONES (LIKES, DISLIKES, COMENTARIOS) --- */}
+          <View style={[styles.actionsRow, isDarkTheme ? styles.actionsRowDark : styles.actionsRowLight]}>
+            <TouchableOpacity style={styles.actionButton} onPress={handleLike}>
+              <Ionicons name="thumbs-up-outline" size={24} color={isDarkTheme ? '#94a3b8' : '#64748b'} />
+              <Text style={[styles.actionText, isDarkTheme ? styles.videoViewsDark : styles.videoViewsLight]}>{videoData.likes || 0}</Text>
             </TouchableOpacity>
-          ))}
-        </ScrollView>
+            <TouchableOpacity style={styles.actionButton} onPress={handleDislike}>
+              <Ionicons name="thumbs-down-outline" size={24} color={isDarkTheme ? '#94a3b8' : '#64748b'} />
+              <Text style={[styles.actionText, isDarkTheme ? styles.videoViewsDark : styles.videoViewsLight]}>{videoData.dislikes || 0}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.actionButton}>
+              <Ionicons name="chatbubble-outline" size={24} color={isDarkTheme ? '#94a3b8' : '#64748b'} />
+              <Text style={[styles.actionText, isDarkTheme ? styles.videoViewsDark : styles.videoViewsLight]}>Comentar</Text>
+            </TouchableOpacity>
+          </View>
+          
+          {/* --- SECCIÓN DE COMENTARIOS --- */}
+          <View style={styles.commentsSection}>
+            <Text style={[styles.sectionTitle, isDarkTheme ? styles.videoTitleDark : styles.videoTitleLight]}>Comentarios</Text>
+            {/* Aquí iría un componente de lista de comentarios */}
+            <View style={[styles.commentCard, isDarkTheme ? styles.videoCardDark : styles.videoCardLight]}>
+                <Ionicons name="person-circle-outline" size={32} color={isDarkTheme ? '#94a3b8' : '#64748b'} style={{marginRight: 8}}/>
+                <View style={styles.flexContainer}>
+                    <Text style={[styles.commentAuthor, isDarkTheme ? styles.videoTitleDark : styles.videoTitleLight]}>juanitopistolas</Text>
+                    <Text style={isDarkTheme ? styles.videoInstructorDark : styles.videoInstructorLight}>Muy Util!</Text>
+                </View>
+            </View>
+          </View>
+
+          {/* --- VIDEOS RECOMENDADOS --- */}
+          <View style={styles.recommendationsSection}>
+             <Text style={[styles.sectionTitle, isDarkTheme ? styles.videoTitleDark : styles.videoTitleLight]}>Recomendados</Text>
+             {recommendations.map(rec => (
+                 <TouchableOpacity 
+                    key={rec.id} 
+                    style={[styles.recommendationCard, isDarkTheme ? styles.videoCardDark : styles.videoCardLight]}
+                    onPress={() => navigation.push('Watch', { id: rec.id })}
+                 >
+                    <View style={styles.thumbnailContainer}>
+                      {rec.thumbnailUrl ? (
+                        <Image source={{ uri: rec.thumbnailUrl }} style={styles.thumbnail} />
+                      ) : (
+                        <Text style={styles.thumbnail}>🖼️ Miniatura</Text>
+                      )}
+                      <Text style={styles.duration}>{rec.duration || '0:00'}</Text>
+                    </View>
+                    <View style={styles.videoDetails}>
+                      <Text numberOfLines={2} style={isDarkTheme ? styles.videoTitleDark : styles.videoTitleLight}>
+                        {rec.title}
+                      </Text>
+                      <Text style={isDarkTheme ? styles.videoInstructorDark : styles.videoInstructorLight}>
+                        {rec.author || 'Anónimo'}
+                      </Text>
+                      <View style={styles.videoMeta}>
+                        <Text style={isDarkTheme ? styles.videoViewsDark : styles.videoViewsLight}>{rec.views || 0} vistas</Text>
+                        <Text style={isDarkTheme ? styles.videoTimeDark : styles.videoTimeLight}> • {rec.time || 'reciente'}</Text>
+                      </View>
+                    </View>
+                 </TouchableOpacity>
+             ))}
+          </View>
+
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: 'transparent',
-  },
-  header: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    width: '100%',
-    zIndex: 1000,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingBottom: 0,
-    height: 64,
-    justifyContent: 'space-between',
-  },
-  headerBg: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'linear-gradient(90deg, #8bc34a 0%, #11151b 100%)',
-    opacity: 0.10,
-    zIndex: -1,
-    borderBottomLeftRadius: 22,
-    borderBottomRightRadius: 22,
-  },
-  headerBackBtn: {
-    backgroundColor: '#fff',
-    borderRadius: 24,
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#8bc34a',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  headerCenter: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+// --- HOJA DE ESTILOS ---
+const { width: screenWidth } = Dimensions.get('window');
 
-  container: {
+const styles = StyleSheet.create({
+  // Contenedores y Layout
+  flexContainer: {
     flex: 1,
   },
-  header: {
-    position: 'absolute',
-    top: 0,
-    width: '100%',
-    zIndex: 1000,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    backgroundColor: 'transparent',
-  },
-  logoDark: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#8bc34a',
-    textShadowColor: 'rgba(139, 195, 74, 0.3)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
-  },
-  logoLight: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#6aab3b',
-    textShadowColor: 'rgba(139, 195, 74, 0.2)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
-  },
-  themeToggle: {
-    backgroundColor: 'rgba(139, 195, 74, 0.1)',
-    borderRadius: 50,
-    padding: 8,
-    width: 40,
-    height: 40,
+  centeredContainer: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 20,
   },
-  themeToggleText: {
-    fontSize: 20,
+  contentPadding: {
+    padding: 16,
   },
-  scrollContent: {
-    flexGrow: 1,
-    paddingTop: 70 + (Platform.OS === 'ios' ? 0 : 20),
-    paddingBottom: 20,
+  
+  // Colores de Fondo y Texto (usando la paleta de dashboard.tsx)
+  containerDark: {
+    backgroundColor: '#0f172a',
   },
-  videoShadowWrap: {
-    marginTop: 80,
-    marginBottom: 28,
-    paddingHorizontal: 18,
-    shadowColor: '#8bc34a',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.13,
-    shadowRadius: 16,
-    elevation: 8,
+  containerLight: {
+    backgroundColor: '#f5f7fa',
   },
-  videoContainer: {
-    borderRadius: 18,
-    overflow: 'hidden',
-    backgroundColor: '#181a20',
-    borderWidth: 2,
-    borderColor: '#8bc34a',
+  videoTitleDark: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#e2e8f0',
+    marginBottom: 4,
   },
-  videoPlayer: {
-    width: '100%',
-    height: 230,
-    backgroundColor: '#000',
-    borderRadius: 18,
+  videoTitleLight: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1e293b',
+    marginBottom: 4,
   },
-  metaBox: {
-    padding: 18,
-    marginHorizontal: 10,
-    marginTop: 2,
-    backgroundColor: 'rgba(139,195,74,0.09)',
+  videoInstructorDark: {
+    fontSize: 14,
+    color: '#94a3b8',
+    marginBottom: 4,
+  },
+  videoInstructorLight: {
+    fontSize: 14,
+    color: '#64748b',
+    marginBottom: 4,
+  },
+  videoViewsDark: {
+    fontSize: 12,
+    color: '#64748b',
+  },
+  videoViewsLight: {
+    fontSize: 12,
+    color: '#94a3b8',
+  },
+  videoCardDark: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  videoCardLight: {
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.05)',
     shadowColor: '#8bc34a',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.09,
+    shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 2,
   },
-  title: {
+
+  // Estados de Carga y Error
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+  },
+  loadingTextDark: {
+    color: '#8bc34a',
+    fontSize: 16,
+  },
+  loadingTextLight: {
+    color: '#6aab3b',
+    fontSize: 16,
+  },
+  errorText: {
+    color: '#EF4444',
+    fontSize: 18,
+    textAlign: 'center',
+    marginTop: 16,
+    marginBottom: 24,
+  },
+  backButton: {
+      backgroundColor: '#8bc34a',
+      paddingVertical: 10,
+      paddingHorizontal: 20,
+      borderRadius: 8,
+  },
+  backButtonText: {
+      color: 'white',
+      fontWeight: 'bold',
+  },
+
+  // Reproductor de Video
+  videoPlayerContainer: {
+    width: screenWidth,
+    height: screenWidth * (9 / 16), // Aspect ratio 16:9
+    backgroundColor: '#000',
+  },
+  videoPlayer: {
+    width: '100%',
+    height: '100%',
+  },
+  videoPoster: {
+    resizeMode: 'cover',
+    borderRadius: 12,
+  },
+  goBackButton: {
+      position: 'absolute',
+      top: Platform.OS === 'ios' ? 40 : 20,
+      left: 16,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      borderRadius: 20,
+      width: 40,
+      height: 40,
+      justifyContent: 'center',
+      alignItems: 'center',
+  },
+  
+  // Metadatos del Video
+  videoTitle: {
     fontSize: 20,
     fontWeight: 'bold',
     marginBottom: 4,
   },
-  videoTitleDark: {
-    color: '#e2e8f0',
-  },
-  videoTitleLight: {
-    color: '#1e293b',
-  },
-  videoMetaRow: {
-    flexDirection: 'row',
-    marginBottom: 8,
-    gap: 10,
-  },
-  badgeInstructor: {
+  metadataRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#e9f6e3',
-    borderRadius: 12,
-    paddingVertical: 2,
-    paddingHorizontal: 10,
-    marginRight: 8,
+    gap: 8,
+    marginBottom: 12,
   },
-  badgeViews: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f2f2f2',
-    borderRadius: 12,
-    paddingVertical: 2,
-    paddingHorizontal: 10,
-  },
-  badgeText: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  badgeTextDark: {
-    color: '#8bc34a',
-  },
-  badgeTextLight: {
-    color: '#1e293b',
-  },
-  author: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    marginRight: 8,
-  },
-  videoInstructorDark: {
-    color: '#e2e8f0',
-  },
-  videoInstructorLight: {
-    color: '#1e293b',
-  },
-  views: {
-    fontSize: 14,
-  },
-  videoViewsDark: {
-    color: '#94a3b8',
-  },
-  videoViewsLight: {
-    color: '#94a3b8',
-  },
-  desc: {
+  videoDescription: {
     fontSize: 14,
     lineHeight: 20,
-    marginBottom: 8,
   },
-  videoDescriptionDark: {
-    color: '#cbd5e1',
+  
+  // Barra de Acciones
+  actionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginVertical: 20,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    paddingVertical: 8,
   },
-  videoDescriptionLight: {
-    color: '#475569',
+  actionsRowDark: {
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
-  recsTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginTop: 12,
+  actionsRowLight: {
+    borderColor: 'rgba(0, 0, 0, 0.05)',
   },
-  recsScroll: {
-    marginVertical: 8,
-    paddingLeft: 8,
-  },
-  recCard: {
-    width: 120,
-    marginRight: 14,
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    shadowColor: '#8bc34a',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.10,
-    shadowRadius: 8,
-    elevation: 4,
+  actionButton: {
     alignItems: 'center',
-    padding: 8,
+    gap: 4,
   },
-  recThumbShadow: {
-    shadowColor: '#8bc34a',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.11,
-    shadowRadius: 6,
-    elevation: 2,
-    marginBottom: 6,
+  actionText: {
+    fontSize: 12,
   },
-  recThumbRound: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    marginBottom: 2,
-    backgroundColor: '#e2e8f0',
-    borderWidth: 2,
-    borderColor: '#8bc34a',
+  
+  // Secciones
+  sectionTitle: {
+      fontSize: 18,
+      fontWeight: 'bold',
+      marginBottom: 12,
   },
-  recTitle: {
-    fontSize: 14,
-    fontWeight: '500',
+
+  // Comentarios
+  commentsSection: {
+    marginTop: 16,
   },
-  videoInfoDark: {
-    // para fondo oscuro
+  commentCard: {
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  videoInfoLight: {
-    // para fondo claro
+  commentAuthor: {
+      fontWeight: 'bold',
+      marginBottom: 2,
   },
+
+  // Recomendaciones
+  recommendationsSection: {
+      marginTop: 24,
+  },
+  recommendationCard: {
+      marginBottom: 16,
+  },
+  thumbnailContainer: {
+    position: 'relative',
+  },
+  thumbnail: {
+    height: 180,
+    backgroundColor: 'rgba(139, 195, 74, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    color: '#8bc34a',
+    fontSize: 16,
+  },
+  duration: {
+    position: 'absolute',
+    bottom: 8,
+    right: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    color: 'white',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    fontSize: 12,
+  },
+  videoDetails: {
+    padding: 12,
+  },
+  videoMeta: {
+    flexDirection: 'row',
+  },
+  videoTimeDark: {
+    fontSize: 12,
+    color: '#64748b',
+  },
+  videoTimeLight: {
+    fontSize: 12,
+    color: '#94a3b8',
+  }
 });

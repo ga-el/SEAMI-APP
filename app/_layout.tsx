@@ -40,6 +40,7 @@ export default function RootLayout() {
           <Stack.Screen name="complete-profile" options={{ headerShown: false }} />
           <Stack.Screen name="complete-profile-teacher" options={{ headerShown: false }} />
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="watch" options={{ headerShown: false }} />
           <Stack.Screen name="+not-found" />
           <Stack.Screen name="ZEN" options={{ headerShown: false }} />
         </Stack>
