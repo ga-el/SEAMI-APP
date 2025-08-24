@@ -1,13 +1,13 @@
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  Animated,
-  Easing,
-  SafeAreaView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    Animated,
+    Easing,
+    SafeAreaView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 
 const IndexScreen = () => {
@@ -61,7 +61,16 @@ const IndexScreen = () => {
   }, [subtitleAnim]);
 
   useEffect(() => {
-    router.replace('/welcome');
+    // Add a small delay to ensure router is fully initialized
+    const timer = setTimeout(() => {
+      try {
+        router.replace('/welcome');
+      } catch (error) {
+        console.error('Navigation error:', error);
+      }
+    }, 100);
+    
+    return () => clearTimeout(timer);
   }, [router]);
 
   const toggleTheme = () => {

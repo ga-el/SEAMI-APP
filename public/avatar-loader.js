@@ -1,8 +1,8 @@
 // avatar-loader.js
 // Script para cargar avatar de usuario desde Firebase y mostrarlo en el header
-import { auth, db } from '../firebase-config.js';
 import { onAuthStateChanged } from 'firebase/auth';
-import { getDoc, doc } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
+import { auth, db } from '../firebase-config.js';
 
 onAuthStateChanged(auth, async (user) => {
   if (!user) {
@@ -32,7 +32,7 @@ onAuthStateChanged(auth, async (user) => {
         return;
       }
       if (data.role === 'profesor') {
-        window.location.href = '/dashboard-profesor';
+        window.location.href = '/dashboard-teacher';
         return;
       }
     } else {

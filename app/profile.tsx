@@ -1,4 +1,6 @@
+import { Ionicons } from '@expo/vector-icons';
 import { Stack, useRouter } from 'expo-router';
+import { doc, getDoc } from 'firebase/firestore';
 import React, { useContext, useEffect, useState } from 'react';
 import {
     SafeAreaView,
@@ -8,13 +10,12 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ThemeContext } from './_layout';
-import { initializeFirebase } from '../firebase-config.js';
-import { getDoc, doc } from 'firebase/firestore';
 import Avatar from '../components/Avatar';
+import BottomNav from '../components/BottomNav';
+import { initializeFirebase } from '../firebase-config.js';
 import { DEFAULT_PHOTO } from '../utils/imgdb';
+import { ThemeContext } from './_layout';
 
 export default function ProfileScreen() {
   const { isDarkTheme, toggleTheme } = useContext(ThemeContext);
@@ -36,7 +37,13 @@ export default function ProfileScreen() {
         if (!user) {
           setError('No autenticado.');
           setLoading(false);
-          router.replace('/login');
+          setTimeout(() => {
+            try {
+              router.replace('/login');
+            } catch (error) {
+              console.error('Navigation error from profile auth check:', error);
+            }
+          }, 100);
           return;
         }
         const userDoc = await getDoc(doc(db, 'users', user.uid));
@@ -175,6 +182,9 @@ export default function ProfileScreen() {
             </View>
           </View>
         </ScrollView>
+        
+        {/* Bottom Navigation */}
+        <BottomNav />
       </SafeAreaView>
     </>
   );
@@ -405,6 +415,7 @@ infoItem: {
     flexGrow: 1,
     padding: 16,
     marginTop: 80,
+    paddingBottom: 100, // Space for bottom navigation
   },
   glassContainerDark: {
     backgroundColor: 'rgba(255, 255, 255, 0.05)',

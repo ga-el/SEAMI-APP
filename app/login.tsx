@@ -3,16 +3,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useContext, useEffect, useState } from 'react';
 import {
-  ActivityIndicator, // Para el spinner de carga
-  Animated,
-  KeyboardAvoidingView,
-  Platform,
-  SafeAreaView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator, // Para el spinner de carga
+    Animated,
+    KeyboardAvoidingView,
+    Platform,
+    SafeAreaView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemeContext } from './_layout';
@@ -35,16 +35,7 @@ const LoginScreen = () => {
   const [auth, setAuth] = useState<Auth | null>(null);
   const [db, setDb] = useState<Firestore | null>(null);
 
-  useEffect(() => {
-    if (auth) {
-      const unsubscribe = auth.onAuthStateChanged((user) => {
-        if (user) {
-          router.replace('/dashboard');
-        }
-      });
-      return unsubscribe;
-    }
-  }, [auth]);
+  // Removed automatic redirect listener to prevent conflicts with role-based navigation
 
   useEffect(() => {
     (async () => {

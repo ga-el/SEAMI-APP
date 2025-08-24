@@ -1,12 +1,12 @@
-import React, { useContext, useState, useEffect } from 'react';
-import Avatar from '../components/Avatar';
 import { useRouter } from 'expo-router';
-import { SafeAreaView, FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View, Alert } from 'react-native';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { collection, getDocs, orderBy, query } from 'firebase/firestore';
+import React, { useContext, useEffect, useState } from 'react';
+import { Alert, FlatList, SafeAreaView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ThemeContext } from './_layout';
+import BottomNav from '../components/BottomNav';
 import { initializeFirebase } from '../firebase-config';
-import { getAuth, onAuthStateChanged, signOut } from 'firebase/auth';
-import { getFirestore, collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { ThemeContext } from './_layout';
 const { auth, db } = initializeFirebase();
 
 interface VideoItem {
@@ -67,11 +67,16 @@ const [userName, setUserName] = useState<string>('--');
           }
           // Validación de perfil y rol
           if (!data.perfilCompleto) {
-            router.replace('/complete-profile');
+            if (data.role === 'profesor') {
+              router.replace('/complete-profile-teacher');
+            } else {
+              router.replace('/complete-profile');
+            }
             return;
           }
-          if (data.role === 'profesor') {
-            router.replace('/dashboard-profesor');
+          // Solo redirigir si definitivamente NO es profesor
+          if (data.role && data.role !== 'profesor') {
+            router.replace('/dashboard');
             return;
           }
         } else {
@@ -179,49 +184,13 @@ const [userName, setUserName] = useState<string>('--');
         {/* App Name */}
         <Text style={isDarkTheme ? styles.appNameDark : styles.appNameLight}>SEAMI</Text>
 
-        <View style={styles.headerActions}>
-          <TouchableOpacity
-            style={styles.themeToggle}
-            onPress={() => setIsDarkTheme(!isDarkTheme)}
-            accessibilityLabel="Cambiar tema"
-          >
-            <Text style={styles.themeToggleText}>{isDarkTheme ? '🌙' : '☀️'}</Text>
-          </TouchableOpacity>
-          
-          <View style={styles.profileContainer}>
-            <TouchableOpacity
-              style={isDarkTheme ? styles.profileBtnDark : styles.profileBtnLight}
-              onPress={toggleDropdown}
-            >
-              <Avatar avatarUrl={userAvatarUrl} nombre={userName} size={50} />
-            </TouchableOpacity>
-            {showDropdown && (
-              <View style={isDarkTheme ? styles.dropdownDark : styles.dropdownLight}>
-                <TouchableOpacity
-                  onPress={() => router.push('/zen')}
-                  style={isDarkTheme ? styles.dropdownItemDark : styles.dropdownItemLight}
-                >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Text style={styles.zenIcon}>🧘</Text>
-                    <Text style={isDarkTheme ? styles.dropdownItemTextDark : styles.dropdownItemTextLight}>ZEN</Text>
-                  </View>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => router.push('/profile')}
-                  style={isDarkTheme ? styles.dropdownItemDark : styles.dropdownItemLight}
-                >
-                  <Text style={isDarkTheme ? styles.dropdownItemTextDark : styles.dropdownItemTextLight}>Perfil</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={handleLogout}
-                  style={isDarkTheme ? styles.dropdownItemDark : styles.dropdownItemLight}
-                >
-                  <Text style={isDarkTheme ? styles.dropdownItemTextDark : styles.dropdownItemTextLight}>Cerrar Sesión</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
-        </View>
+        <TouchableOpacity
+          style={styles.themeToggle}
+          onPress={toggleTheme}
+          accessibilityLabel="Cambiar tema"
+        >
+          <Text style={styles.themeToggleText}>{isDarkTheme ? '🌙' : '☀️'}</Text>
+        </TouchableOpacity>
       </View>
       
       {/* Barra de búsqueda */}
@@ -257,6 +226,9 @@ const [userName, setUserName] = useState<string>('--');
           }
         />
       )}
+      
+      {/* Bottom Navigation */}
+      <BottomNav />
     </SafeAreaView>
   );
 }
@@ -492,7 +464,7 @@ const styles = StyleSheet.create({
   },
   videoGrid: {
     paddingHorizontal: 16,
-    paddingBottom: 20,
+    paddingBottom: 100, // Space for bottom navigation
   },
   videoCardDark: {
     backgroundColor: 'rgba(255, 255, 255, 0.05)',

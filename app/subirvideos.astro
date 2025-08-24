@@ -1,0 +1,1277 @@
+---
+// src/pages/subir-video.astro
+import MainLayout from '../layouts/MainLayout.astro';
+
+---
+
+
+<MainLayout>
+  <html lang="es">
+    <head>
+      <meta charset="UTF-8" />
+      <title>SEAMI - Subir Video</title>
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.6/dist/ffmpeg.min.js"></script>
+    </head>
+
+    <body class="dark-mode">
+      <!-- Header -->
+      <header class="header">
+        <a href="/dashboard-profesor" class="logo">SEAMI</a>
+
+        <div class="actions">
+          <!-- Botón para cambiar tema -->
+          <button id="toggle-theme" class="theme-toggle">🌙</button>
+
+          <!-- Botón de perfil con menú desplegable -->
+          <div class="profile-dropdown">
+            <button id="profile-btn" class="profile-icon">👤</button>
+            <div id="dropdown-menu" class="dropdown-content hidden">
+              <a href="/profile-profesor" class="dropdown-item">Ver Perfil</a>
+              <a href="/logout" class="dropdown-item">Cerrar Sesión</a>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- Contenido principal -->
+      <main style="padding: 7rem 2rem 2rem 2rem;">
+        <section class="glass-container upload-form-section">
+          <h2>Subir Nuevo Video</h2>
+          <form
+            id="uploadVideoForm"
+            class="upload-form redesigned-form"
+            enctype="multipart/form-data"
+            onsubmit="return uploadVideo(event)"
+          >
+            <div class="form-columns">
+              <div class="form-left">
+                <!-- Título del video -->
+                <div class="form-group card-input">
+                  <label for="title"><span class="input-icon">🎬</span> Título del Video</label>
+                  <input
+                    type="text"
+                    name="title"
+                    id="title"
+                    placeholder="Ejemplo: Introducción a las ecuaciones diferenciales"
+                    required
+                  />
+                </div>
+
+                <!-- Descripción -->
+                <div class="form-group card-input">
+                  <label for="description"><span class="input-icon">📝</span> Descripción del Video</label>
+                  <textarea
+                    name="description"
+                    id="description"
+                    rows="4"
+                    placeholder="Agrega una descripción clara..."></textarea>
+                </div>
+
+                <!-- Materia -->
+                <div class="form-group card-input">
+                  <label><span class="input-icon">📚</span> Materia</label>
+                  <div class="autocomplete-container">
+                    <input
+                      type="text"
+                      id="subject-input"
+                      placeholder="Selecciona la materia"
+                      list="subjects"
+                      required
+                    />
+                    <datalist id="subjects">
+                      <option value="Matemáticas"></option>
+                      <option value="Física"></option>
+                      <option value="Química"></option>
+                      <option value="Biología"></option>
+                      <option value="Historia"></option>
+                    </datalist>
+                  </div>
+                </div>
+
+                <!-- Semestre -->
+                <div class="form-group card-input">
+                  <label for="semester"><span class="input-icon">🏫</span> Semestre</label>
+                  <div class="select-container">
+                    <select name="semester" id="semester" required>
+                      <option value="" disabled selected>Selecciona el semestre</option>
+                      <option value="1">1er Semestre</option>
+                      <option value="2">2do Semestre</option>
+                      <option value="3">3er Semestre</option>
+                      <option value="4">4to Semestre</option>
+                      <option value="5">5to Semestre</option>
+                      <option value="6">6to Semestre</option>
+                    </select>
+                    <span class="select-arrow">▼</span>
+                  </div>
+                </div>
+              </div>
+              <div class="form-right">
+                <!-- Portada del video -->
+                <div class="form-group card-input">
+                  <label for="thumbnail"><span class="input-icon">🖼️</span> Portada del Video</label>
+                  <div class="file-input-container">
+                    <input
+                      type="file"
+                      name="thumbnail"
+                      id="thumbnail"
+                      accept="image/*"
+                      required
+                    />
+                    <div class="file-input-overlay">
+                      <span class="file-icon">🖼️</span>
+                      <span class="file-text">Seleccionar imagen</span>
+                    </div>
+                  </div>
+                  <div id="thumb-status" class="file-status"></div>
+                </div>
+
+                <!-- Archivo de video -->
+                <div class="form-group card-input">
+                  <label for="video_file"><span class="input-icon">🎥</span> Archivo de Video</label>
+                  <div class="file-input-container">
+                    <input
+                      type="file"
+                      name="video_file"
+                      id="video_file"
+                      accept="video/*"
+                      required
+                    />
+                    <div class="file-input-overlay">
+                      <span class="file-icon">🎥</span>
+                      <span class="file-text">Seleccionar video</span>
+                    </div>
+                  </div>
+                  <div id="video-status" class="file-status"></div>
+                </div>
+              </div>
+            </div>
+            <!-- Botón de envío -->
+            <button type="submit" class="submit-btn">Subir Video</button>
+          </form>
+        </section>
+      </main>
+
+      <!-- Mensaje de progreso -->
+      <div id="compression-status" style="text-align:center;margin:1rem 0;color:#8bc34a;font-weight:bold;"></div>
+
+      <!-- Animación de carga -->
+      <div id="upload-loading" style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:99999;background:rgba(15,23,42,0.97);align-items:center;justify-content:center;flex-direction:column;backdrop-filter:blur(2px);">
+        <div class="seami-spinner" style="margin-bottom:1.2rem;width:70px;height:70px;border:8px solid #8bc34a33;border-top:8px solid #8bc34a;border-radius:50%;animation:spin 1s linear infinite;"></div>
+        <span id="upload-loading-msg" style="color:#8bc34a;font-size:1.5rem;font-weight:700;letter-spacing:1px;text-shadow:0 2px 12px #000b;">Comprimiendo video...</span>
+      </div>
+
+      <!-- Script para modo oscuro y validación de autenticación -->
+      <script is:inline>
+        document.addEventListener('DOMContentLoaded', async () => {
+          // Verificar autenticación primero
+          try {
+            const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js');
+            const { getAuth, onAuthStateChanged } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js');
+            const { getFirestore, doc, getDoc } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+            const firebaseConfig = {
+              apiKey: "AIzaSyBsfou4dclJAJeX-rigz3QHA-mJ0zjh-FI",
+              authDomain: "seami-25.firebaseapp.com",
+              projectId: "seami-25",
+              storageBucket: "seami-25.firebasestorage.app",
+              messagingSenderId: "345080770100",
+              appId: "1:345080770100:web:cc49649cd2d0bef037a461"
+            };
+            const app = initializeApp(firebaseConfig);
+            const auth = getAuth(app);
+            const db = getFirestore(app);
+            
+            onAuthStateChanged(auth, async (user) => {
+              if (!user) {
+                window.location.href = '/login';
+                return;
+              }
+              
+              // Verificar que el usuario sea profesor
+              try {
+                const userDoc = await getDoc(doc(db, 'users', user.uid));
+                if (userDoc.exists()) {
+                  const userData = userDoc.data();
+                  if (userData.role !== 'profesor') {
+                    alert('Solo los profesores pueden subir videos.');
+                    window.location.href = '/dashboard';
+                    return;
+                  }
+                }
+              } catch (e) {
+                console.log('Error al verificar rol:', e);
+              }
+            });
+          } catch (e) {
+            console.log('Error al inicializar Firebase:', e);
+          }
+          
+          const toggleBtn = document.getElementById("toggle-theme");
+          const body = document.body;
+
+          // Función para aplicar el tema
+          function applyTheme(isDark) {
+            toggleBtn.classList.add('changing');
+            body.classList.toggle("light-mode", !isDark);
+            toggleBtn.textContent = isDark ? "🌙" : "☀️";
+            localStorage.setItem("theme", isDark ? "dark" : "light");
+            setTimeout(() => {
+              toggleBtn.classList.remove('changing');
+            }, 500);
+          }
+
+          // Cargar tema guardado
+          const savedTheme = localStorage.getItem("theme");
+          if (savedTheme === "light") {
+            applyTheme(false);
+          } else {
+            applyTheme(true);
+          }
+
+          // Manejar clic en el botón
+          toggleBtn.addEventListener("click", () => {
+            const isDark = !body.classList.contains("light-mode");
+            applyTheme(!isDark);
+          });
+
+          // Dropdown
+          const profileBtn = document.getElementById("profile-btn");
+          const dropdownMenu = document.getElementById("dropdown-menu");
+          profileBtn.addEventListener("click", () => {
+            dropdownMenu.classList.toggle("hidden");
+          });
+          document.addEventListener("click", function (event) {
+            if (
+              !profileBtn.contains(event.target) &&
+              !dropdownMenu.contains(event.target)
+            ) {
+              dropdownMenu.classList.add("hidden");
+            }
+          });
+
+          // Previews
+          const thumbInput = document.getElementById('thumbnail');
+          const videoInput = document.getElementById('video_file');
+          const thumbGroup = thumbInput.parentElement.parentElement;
+          const videoGroup = videoInput.parentElement.parentElement;
+          let previewImage = document.createElement('img');
+          previewImage.style.display = 'none';
+          previewImage.style.maxWidth = '220px';
+          previewImage.style.borderRadius = '16px';
+          previewImage.style.marginTop = '1rem';
+          previewImage.style.boxShadow = '0 4px 24px rgba(139,195,74,0.18)';
+          let previewVideo = document.createElement('video');
+          previewVideo.style.display = 'none';
+          previewVideo.style.maxWidth = '320px';
+          previewVideo.style.borderRadius = '16px';
+          previewVideo.style.marginTop = '1rem';
+          previewVideo.style.boxShadow = '0 4px 24px rgba(139,195,74,0.18)';
+          previewVideo.controls = true;
+          thumbGroup.appendChild(previewImage);
+          videoGroup.appendChild(previewVideo);
+          const thumbStatus = document.getElementById('thumb-status');
+          const videoStatus = document.getElementById('video-status');
+          thumbInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+              previewImage.src = URL.createObjectURL(file);
+              previewImage.style.display = 'block';
+              thumbStatus.innerHTML = '<span class="badge-success">¡Imagen lista!</span>';
+            } else {
+              previewImage.style.display = 'none';
+              thumbStatus.innerHTML = '';
+            }
+          });
+          videoInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file && file.size > 1024 * 1024 * 1024) { // 1GB
+              alert('El video no puede pesar más de 1 GB.');
+              videoInput.value = '';
+              previewVideo.style.display = 'none';
+              videoStatus.innerHTML = '';
+            }
+          });
+        });
+
+        // Espera a que FFmpeg esté disponible en window
+        async function waitForFFmpeg() {
+          while (typeof window.FFmpeg === 'undefined') {
+            await new Promise(res => setTimeout(res, 50));
+          }
+        }
+        // Obtener duración del video en segundos
+        function getVideoDuration(file) {
+          return new Promise((resolve, reject) => {
+            const video = document.createElement('video');
+            video.preload = 'metadata';
+            video.onloadedmetadata = function () {
+              window.URL.revokeObjectURL(video.src);
+              resolve(video.duration);
+            };
+            video.onerror = reject;
+            video.src = URL.createObjectURL(file);
+          });
+        }
+        // Calcular bitrate necesario para un tamaño objetivo (MB)
+        function calculateBitrate(targetMB, durationSeconds) {
+          return Math.floor((targetMB * 8192) / durationSeconds); // kbps
+        }
+        // Comprimir video a un peso objetivo (por defecto 30MB)
+        async function compressVideo(file, loadingMsg, targetMB = 30) {
+          await waitForFFmpeg(); // Espera a que FFmpeg esté disponible
+          const { createFFmpeg, fetchFile } = window.FFmpeg;
+          loadingMsg.textContent = 'Calculando duración del video...';
+          const duration = await getVideoDuration(file);
+          const bitrate = calculateBitrate(targetMB, duration); // kbps
+          const ffmpeg = createFFmpeg({ log: true });
+          loadingMsg.textContent = 'Cargando compresor de video...';
+          await ffmpeg.load();
+          loadingMsg.textContent = 'Preparando compresión...';
+          ffmpeg.FS('writeFile', 'input.mp4', await fetchFile(file));
+          loadingMsg.textContent = `Comprimiendo a ~${targetMB}MB...`;
+          await ffmpeg.run(
+            '-i', 'input.mp4',
+            '-vf', 'scale=-2:720',
+            '-b:v', `${bitrate}k`,
+            '-c:a', 'aac',
+            '-b:a', '128k',
+            '-preset', 'veryfast',
+            'output.mp4'
+          );
+          loadingMsg.textContent = 'Finalizando compresión...';
+          const data = ffmpeg.FS('readFile', 'output.mp4');
+          return new Blob([data.buffer], { type: 'video/mp4' });
+        }
+
+        // Mostrar overlay de carga desde el principio y mensajes claros
+        async function uploadVideo(event) {
+          event.preventDefault();
+          const loadingDiv = document.getElementById('upload-loading');
+          const loadingMsg = document.getElementById('upload-loading-msg');
+          loadingDiv.style.display = 'flex';
+          loadingMsg.textContent = 'Preparando subida...';
+
+          try {
+            // Recoge los datos del formulario
+            const title = document.getElementById('title').value;
+            const description = document.getElementById('description').value;
+            const subject = document.getElementById('subject-input').value;
+            const semester = document.getElementById('semester').value;
+            const videoInput = document.getElementById('video_file');
+            const thumbnailInput = document.getElementById('thumbnail');
+
+            const videoFile = videoInput.files[0];
+            const thumbnailFile = thumbnailInput.files[0];
+
+            if (!videoFile || !thumbnailFile) {
+              loadingMsg.textContent = 'Debes seleccionar un video y una portada.';
+              setTimeout(() => { loadingDiv.style.display = 'none'; }, 2500);
+              return false;
+            }
+
+            // Paso 1: Validar tamaño y tipo de archivo
+            if (videoFile.size > 1024 * 1024 * 1024) { // 1GB
+              loadingMsg.textContent = 'El video no puede pesar más de 1 GB.';
+              setTimeout(() => { loadingDiv.style.display = 'none'; }, 3500);
+              return false;
+            }
+            if (!videoFile.type.startsWith('video/')) {
+              loadingMsg.textContent = 'El archivo seleccionado no es un video.';
+              setTimeout(() => { loadingDiv.style.display = 'none'; }, 3500);
+              return false;
+            }
+
+            // === NUEVO: Calcular duración real del video ===
+            loadingMsg.textContent = 'Calculando duración del video...';
+            const getVideoDuration = (file) => {
+              return new Promise((resolve, reject) => {
+                const video = document.createElement('video');
+                video.preload = 'metadata';
+                video.onloadedmetadata = function () {
+                  window.URL.revokeObjectURL(video.src);
+                  resolve(video.duration);
+                };
+                video.onerror = reject;
+                video.src = URL.createObjectURL(file);
+              });
+            };
+            const rawDuration = await getVideoDuration(videoFile);
+            // Formatear a mm:ss
+            const minutos = Math.floor(rawDuration / 60);
+            const segundos = Math.floor(rawDuration % 60).toString().padStart(2, '0');
+            const duration = `${minutos}:${segundos}`;
+            // === FIN NUEVO ===
+
+            // Paso 2: Subir video al backend para compresión y subida a la nube
+            loadingMsg.textContent = 'Subiendo video al servidor para compresión...';
+            const formData = new FormData();
+            formData.append('video', videoFile);
+            let videoUrl = '';
+            try {
+              const res = await fetch('https://server-de-ulpoads.onrender.com/upload', {
+                method: 'POST',
+                body: formData,
+              });
+              const data = await res.json();
+              if (!data.success || !data.videoUrl) {
+                loadingMsg.textContent = 'Error: No se recibió la URL del video. La compresión falló.';
+                setTimeout(() => { loadingDiv.style.display = 'none'; }, 3500);
+                return false;
+              }
+              loadingMsg.textContent = '¡Video comprimido y subido con éxito!';
+              await new Promise(res => setTimeout(res, 1200));
+              videoUrl = data.videoUrl;
+            } catch (err) {
+              loadingMsg.textContent = 'Error al subir el video al servidor. La compresión falló.\n' + (err.message || err);
+              setTimeout(() => { loadingDiv.style.display = 'none'; }, 3500);
+              return false;
+            }
+
+            // Paso 3: Subir portada a imgbb
+            loadingMsg.textContent = 'Subiendo portada...';
+            const imgbbApiKey = '10be477c62336a10f1d1151961458302';
+            const thumbFormData = new FormData();
+            thumbFormData.append('image', thumbnailFile);
+            const thumbRes = await fetch(`https://api.imgbb.com/1/upload?key=${imgbbApiKey}`, {
+              method: 'POST',
+              body: thumbFormData
+            });
+            const thumbData = await thumbRes.json();
+            const thumbnailUrl = thumbData.data && thumbData.data.url ? thumbData.data.url : '';
+            if (!thumbnailUrl) {
+              loadingMsg.textContent = 'Error: No se pudo subir la portada. Intenta de nuevo.';
+              setTimeout(() => { loadingDiv.style.display = 'none'; }, 2500);
+              return false;
+            }
+
+            // Paso 4: Guardar datos en Firestore
+            loadingMsg.textContent = 'Guardando datos...';
+            try {
+              const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js');
+              const { getFirestore, collection, addDoc, doc, getDoc } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+              const { getAuth } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js');
+              const firebaseConfig = {
+                apiKey: "AIzaSyBsfou4dclJAJeX-rigz3QHA-mJ0zjh-FI",
+                authDomain: "seami-25.firebaseapp.com",
+                projectId: "seami-25",
+                storageBucket: "seami-25.firebasestorage.app",
+                messagingSenderId: "345080770100",
+                appId: "1:345080770100:web:cc49649cd2d0bef037a461"
+              };
+              const app = initializeApp(firebaseConfig);
+              const db = getFirestore(app);
+              const auth = getAuth(app);
+              const user = auth.currentUser;
+              
+              console.log('🔍 DEBUG: Verificando datos del usuario...');
+              console.log('Usuario autenticado:', user ? 'SÍ' : 'NO');
+              
+              if (!user) {
+                console.log('❌ ERROR: No hay usuario autenticado');
+                loadingMsg.textContent = 'Error: Debes iniciar sesión para subir videos.';
+                setTimeout(() => { loadingDiv.style.display = 'none'; }, 3500);
+                return false;
+              }
+              
+              const uid = user.uid;
+              let profesor = '';
+              let avatarUrl = '';
+              
+              console.log('📋 Obteniendo datos del usuario desde Firestore...');
+              console.log('- UID:', uid);
+              
+              // Buscar datos del usuario en la colección users
+              try {
+                const userDocRef = doc(db, 'users', uid);
+                const userDoc = await getDoc(userDocRef);
+                
+                if (userDoc.exists()) {
+                  const userData = userDoc.data();
+                  console.log('✅ Documento de usuario encontrado:', userData);
+                  
+                  // Obtener nombre del usuario (prioridad: nombre > displayName > email)
+                  if (userData.nombre) {
+                    profesor = userData.nombre;
+                    console.log('✅ Nombre obtenido de Firestore (nombre):', profesor);
+                  } else if (user.displayName) {
+                    profesor = user.displayName;
+                    console.log('✅ Nombre obtenido de Auth (displayName):', profesor);
+                  } else if (user.email) {
+                    profesor = user.email;
+                    console.log('✅ Usando email como nombre:', profesor);
+                  } else {
+                    profesor = 'Usuario SEAMI';
+                    console.log('⚠️ Usando nombre por defecto');
+                  }
+                  
+                  // Obtener avatar del usuario (prioridad: avatarUrl > photoURL)
+                  if (userData.avatarUrl) {
+                    avatarUrl = userData.avatarUrl;
+                    console.log('✅ Avatar obtenido de Firestore (avatarUrl):', avatarUrl);
+                  } else if (user.photoURL) {
+                    avatarUrl = user.photoURL;
+                    console.log('✅ Avatar obtenido de Auth (photoURL):', avatarUrl);
+                  } else {
+                    // Avatar por defecto si no hay ninguno
+                    avatarUrl = 'https://i.ibb.co/VqKJ8M8/default-avatar.png';
+                    console.log('⚠️ Usando avatar por defecto');
+                  }
+                  
+                } else {
+                  console.log('❌ Documento de usuario NO encontrado en Firestore');
+                  // Usar datos de Auth como respaldo
+                  profesor = user.displayName || user.email || 'Usuario SEAMI';
+                  avatarUrl = user.photoURL || 'https://i.ibb.co/VqKJ8M8/default-avatar.png';
+                  console.log('📧 Usando datos de Auth como respaldo');
+                }
+                
+              } catch (e) {
+                console.log('❌ Error al buscar en Firestore:', e.message);
+                // Usar datos de Auth como respaldo en caso de error
+                profesor = user.displayName || user.email || 'Usuario SEAMI';
+                avatarUrl = user.photoURL || 'https://i.ibb.co/VqKJ8M8/default-avatar.png';
+                console.log('📧 Usando datos de Auth como respaldo por error');
+              }
+              
+              console.log('📊 DATOS FINALES A GUARDAR:');
+              console.log('- UID:', uid);
+              console.log('- Profesor:', profesor);
+              console.log('- AvatarUrl:', avatarUrl);
+              
+              // Crear objeto de video con todos los datos del usuario
+              const videoData = {
+                title,
+                description,
+                subject,
+                semester,
+                videoUrl,
+                thumbnailUrl,
+                duration, // Duración real del video
+                // Datos del autor/usuario que subió el video
+                autor: {
+                  uid: uid,
+                  nombre: profesor,
+                  avatarUrl: avatarUrl
+                },
+                // Campos adicionales para compatibilidad
+                uid: uid, // Mantener para compatibilidad
+                profesor: profesor, // Mantener para compatibilidad
+                avatarUrl: avatarUrl, // Mantener para compatibilidad
+                views: 0,
+                likes: 0,
+                dislikes: 0,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+              };
+              
+              console.log('💾 Guardando video en Firestore:', videoData);
+              await addDoc(collection(db, 'videos'), videoData);
+              mostrarAnimacionExito();
+              document.getElementById('compression-status').textContent = '';
+              loadingMsg.textContent = '¡Video subido con éxito!';
+              setTimeout(() => { loadingDiv.style.display = 'none'; }, 2500);
+            } catch (e) {
+              loadingMsg.textContent = 'Error: No se pudo guardar la información. Intenta de nuevo.';
+              setTimeout(() => { loadingDiv.style.display = 'none'; }, 2500);
+            }
+            return false;
+          } catch (e) {
+            loadingMsg.textContent = 'Error inesperado. Intenta de nuevo.';
+            setTimeout(() => { loadingDiv.style.display = 'none'; }, 2500);
+            return false;
+          }
+        }
+
+        // Animación de éxito
+        function mostrarAnimacionExito() {
+          let animDiv = document.createElement('div');
+          animDiv.className = 'success-anim-overlay';
+          animDiv.innerHTML = `
+            <div class="success-anim-container">
+              <svg class="success-check" viewBox="0 0 52 52"><circle class="success-check-circle" cx="26" cy="26" r="25" fill="none"/><path class="success-check-check" fill="none" d="M14 27l7 7 16-16"/></svg>
+              <div class="success-msg">¡Video subido!</div>
+            </div>
+          `;
+          document.body.appendChild(animDiv);
+          setTimeout(() => {
+            animDiv.classList.add('hide');
+            setTimeout(() => animDiv.remove(), 800);
+          }, 2000);
+        }
+      </script>
+
+      <style>
+        /* Reset básico */
+        * {
+          margin: 0;
+          padding: 0;
+          box-sizing: border-box;
+          font-family: "Segoe UI", sans-serif;
+        }
+
+        body {
+          min-height: 100vh;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: linear-gradient(to right bottom, #0f172a, #3a2443);
+          color: white;
+          transition: all 0.4s ease;
+          animation: fadeIn 0.8s ease-out;
+        }
+
+        body.light-mode {
+          background: linear-gradient(135deg, #f5f7fa 0%, #e4e8f0 100%);
+          color: #2d3748;
+        }
+
+        .light-mode .glass-container {
+          background: #fff;
+          border: 1.5px solid #cbd5e1;
+          box-shadow: 0 8px 32px rgba(0,0,0,0.06);
+        }
+        .light-mode h2, .light-mode label, .light-mode .file-text {
+          color: #1a202c;
+        }
+        .light-mode .form-group input[type="text"],
+        .light-mode .form-group textarea,
+        .light-mode .form-group select {
+          background: #fff;
+          color: #1a202c;
+          border: 1.5px solid #cbd5e1;
+        }
+        .light-mode .form-group input[type="text"]:focus,
+        .light-mode .form-group textarea:focus,
+        .light-mode .form-group select:focus {
+          background: #f7fafc;
+          border-color: #3182ce;
+          box-shadow: 0 0 0 2px #90cdf4;
+        }
+        .light-mode .form-group input[type="text"]::placeholder,
+        .light-mode .form-group textarea::placeholder {
+          color: #a0aec0;
+        }
+        .light-mode .submit-btn {
+          background: #2d3748;
+          color: #fff;
+          border: none;
+        }
+        .light-mode .submit-btn:hover {
+          background: #8bc34a;
+          color: #0f172a;
+        }
+
+        .light-mode .theme-toggle {
+          background: transparent;
+          color: #0f172a;
+        }
+
+        /* === Header === */
+        .header {
+          position: fixed;
+          top: 0;
+          width: 100%;
+          z-index: 1000;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          background-color: rgba(0, 0, 0, 0.6);
+          backdrop-filter: blur(10px);
+          padding: 1.5rem 2rem;
+          color: white;
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+          transition: all 0.3s ease;
+          animation: fadeInUp 0.8s ease-out;
+        }
+
+        .actions {
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+        }
+
+        .logo {
+          font-size: 1.7rem;
+          font-weight: bold;
+          color: #8bc34a;
+          text-decoration: none;
+          cursor: pointer;
+          transition: color 0.3s ease;
+        }
+
+        .logo:hover {
+          color: #6aab3b;
+        }
+
+        .theme-toggle {
+          font-size: 1.2rem;
+          line-height: 1;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          height: 2.2rem;
+          width: 2.2rem;
+          padding: 0;
+          background: transparent;
+          border: none;
+          border-radius: 50%;
+          color: rgba(100, 181, 246, 0.7);
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          box-shadow: none;
+          outline: none;
+          opacity: 0.85;
+          transform-origin: center;
+        }
+        .theme-toggle:hover {
+          background: rgba(100, 181, 246, 0.08);
+          color: rgba(100, 181, 246, 1);
+          transform: scale(1.08) rotate(5deg);
+          opacity: 1;
+        }
+        .theme-toggle:active {
+          transform: scale(0.95) rotate(-10deg);
+          transition: all 0.1s ease;
+        }
+        @keyframes themeToggleSpin {
+          0% {
+            transform: rotate(0deg);
+          }
+          100% {
+            transform: rotate(360deg);
+          }
+        }
+        .theme-toggle.changing {
+          animation: themeToggleSpin 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .profile-dropdown {
+          position: relative;
+        }
+
+        .profile-icon {
+          background: transparent;
+          border: none;
+          font-size: 1.2rem;
+          color: white;
+          cursor: pointer;
+        }
+
+        .dropdown-content {
+          position: absolute;
+          right: 0;
+          top: 2.5rem;
+          background: rgba(255, 255, 255, 0.1);
+          min-width: 150px;
+          border-radius: 8px;
+          box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+          backdrop-filter: blur(10px);
+          border: 1px solid rgba(255, 255, 255, 0.15);
+          z-index: 1000;
+          transition: all 0.4s ease;
+        }
+
+        body.light-mode .dropdown-content {
+          background: rgba(255, 255, 255, 0.98);
+          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+          border: 1px solid rgba(0, 0, 0, 0.08);
+        }
+
+        .dropdown-content.hidden {
+          display: none;
+        }
+
+        .dropdown-content a {
+          color: white;
+          padding: 0.75rem 1rem;
+          text-decoration: none;
+          display: block;
+          transition: all 0.3s ease;
+        }
+
+        body.light-mode .dropdown-content a {
+          color: #2d3748;
+        }
+
+        .dropdown-content a:hover {
+          background-color: rgba(255, 255, 255, 0.1);
+        }
+
+        body.light-mode .dropdown-content a:hover {
+          background-color: rgba(66, 153, 225, 0.1);
+          color: #3182ce;
+        }
+
+        .light-mode .header {
+          background-color: rgba(255, 255, 255, 0.95);
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+          border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+        }
+
+        .light-mode .logo {
+          color: #8bc34a;    
+        }
+
+        .light-mode .logo:hover {
+          font-weight: bold;
+          color: #557c29;
+        }
+
+        .light-mode .theme-toggle {
+          background: transparent;
+          color: #0f172a;
+        }
+
+        .light-mode .dropdown-content {
+          background: rgba(255, 255, 255, 0.9);
+          border: 1px solid rgba(0, 0, 0, 0.1);
+        }
+
+        .light-mode .dropdown-content a {
+          color: #0f172a;
+        }
+
+        .light-mode .dropdown-content a:hover {
+          background-color: rgba(0, 0, 0, 0.05);
+        }
+
+        /* === Contenedor Glassmorphic === */
+        .glass-container {
+          background: rgba(255, 255, 255, 0.05);
+          border-radius: 16px;
+          padding: 2.5rem 5rem;
+          max-width: 1200px;
+          width: 100%;
+          min-width: 600px;
+          box-sizing: border-box;
+          text-align: left;
+          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+          backdrop-filter: blur(10px);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          animation: fadeInUp 0.8s ease-out 0.2s backwards;
+        }
+
+        h2 {
+          font-size: 2rem;
+          margin-bottom: 2rem;
+          color: #ffffffcc;
+          text-align: center;
+          font-weight: 600;
+          letter-spacing: 0.5px;
+        }
+
+        .upload-form {
+          display: flex;
+          flex-direction: column;
+          gap: 2rem;
+        }
+
+        .form-group {
+          display: flex;
+          flex-direction: column;
+          gap: 0.8rem;
+        }
+
+        .form-group label {
+          font-size: 1rem;
+          font-weight: 500;
+          color: #8bc34a;
+          letter-spacing: 0.5px;
+        }
+
+        .form-group input[type="text"],
+        .form-group input[type="file"],
+        .form-group select,
+        .form-group textarea {
+          width: 100%;
+          padding: 1rem;
+          border: 2px solid rgba(255, 255, 255, 0.1);
+          border-radius: 12px;
+          background: rgba(255, 255, 255, 0.05);
+          color: white;
+          font-size: 1rem;
+          transition: all 0.3s ease;
+          outline: none;
+        }
+
+        .form-group input[type="text"]:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+          border-color: #8bc34a;
+          background: rgba(255, 255, 255, 0.1);
+          box-shadow: 0 0 15px rgba(139, 195, 74, 0.2);
+        }
+
+        .form-group input[type="file"] {
+          padding: 1.5rem;
+          border: 2px dashed rgba(255, 255, 255, 0.2);
+          background: rgba(255, 255, 255, 0.03);
+          cursor: pointer;
+          text-align: center;
+        }
+
+        .form-group input[type="file"]:hover {
+          border-color: #8bc34a;
+          background: rgba(139, 195, 74, 0.1);
+        }
+
+        .form-group input[type="file"]::file-selector-button {
+          background: #8bc34a;
+          color: white;
+          padding: 0.8rem 1.5rem;
+          border: none;
+          border-radius: 8px;
+          cursor: pointer;
+          font-weight: 500;
+          transition: all 0.3s ease;
+          margin-right: 1rem;
+        }
+
+        .form-group input[type="file"]::file-selector-button:hover {
+          background: #6aab3b;
+          transform: translateY(-2px);
+        }
+
+        .form-group select {
+          appearance: none;
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%238bc34a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+          background-repeat: no-repeat;
+          background-position: right 1rem center;
+          background-size: 1.2rem;
+          padding-right: 3rem;
+        }
+
+        .form-group textarea {
+          min-height: 120px;
+          resize: vertical;
+        }
+
+        .form-group textarea::placeholder {
+          color: rgba(255, 255, 255, 0.5);
+        }
+
+        .submit-btn {
+          background: #8bc34a;
+          color: white;
+          border: none;
+          padding: 1rem 2rem;
+          border-radius: 12px;
+          font-size: 1.1rem;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.3s ease;
+          margin-top: 1rem;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+        }
+
+        .submit-btn:hover {
+          background: #6aab3b;
+          transform: translateY(-2px);
+          box-shadow: 0 5px 15px rgba(139, 195, 74, 0.3);
+        }
+
+        .submit-btn:active {
+          transform: translateY(0);
+        }
+
+        @keyframes fadeInUp {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        @media (max-width: 768px) {
+          .glass-container {
+            padding: 2rem;
+            min-width: auto;
+          }
+
+          h2 {
+            font-size: 1.8rem;
+          }
+
+          .form-group input[type="text"],
+          .form-group input[type="file"],
+          .form-group select,
+          .form-group textarea {
+            padding: 0.8rem;
+          }
+        }
+
+        .file-input-container {
+          position: relative;
+          width: 100%;
+        }
+
+        .file-input-container input[type="file"] {
+          position: absolute;
+          width: 100%;
+          height: 100%;
+          opacity: 0;
+          cursor: pointer;
+          z-index: 2;
+        }
+
+        .file-input-overlay {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          padding: 0.8rem;
+          border: 2px dashed rgba(255, 255, 255, 0.3);
+          border-radius: 8px;
+          background: rgba(255, 255, 255, 0.05);
+          transition: all 0.3s ease;
+        }
+
+        .file-input-container:hover .file-input-overlay {
+          border-color: #8bc34a;
+          background: rgba(139, 195, 74, 0.1);
+        }
+
+        .file-icon {
+          font-size: 1.2rem;
+        }
+
+        .file-text {
+          color: rgba(255, 255, 255, 0.8);
+        }
+
+        .select-container {
+          position: relative;
+          width: 100%;
+        }
+
+        .select-container select {
+          width: 100%;
+          padding: 1rem 2.5rem 1rem 1rem;
+          border: 2px solid rgba(139, 195, 74, 0.3);
+          border-radius: 16px;
+          background: linear-gradient(90deg, #232946 60%, #8bc34a22 120%);
+          color: #fff;
+          outline: none;
+          font-size: 1.1rem;
+          appearance: none;
+          cursor: pointer;
+          transition: border 0.3s, box-shadow 0.3s, background 0.3s;
+          font-weight: 500;
+          box-shadow: 0 2px 12px rgba(0,0,0,0.10);
+          margin-top: 0.2rem;
+        }
+
+        .select-container select:focus {
+          border: 2px solid #8bc34a;
+          background: linear-gradient(90deg, #3a2443 60%, #8bc34a33 120%);
+          box-shadow: 0 0 0 3px #8bc34a55;
+          color: #fff;
+        }
+
+        .select-container select option {
+          color: #fff;
+          background: #2a223a;
+          font-size: 1.05rem;
+        }
+
+        .select-arrow {
+          position: absolute;
+          right: 1.2rem;
+          top: 50%;
+          transform: translateY(-50%);
+          color: #8bc34a;
+          font-size: 1.5rem;
+          pointer-events: none;
+          transition: color 0.3s, transform 0.3s;
+        }
+
+        .select-container select:focus + .select-arrow {
+          color: #b6e388;
+          transform: translateY(-50%) rotate(180deg);
+        }
+
+        .select-container select:disabled {
+          background: #444;
+          color: #aaa;
+          cursor: not-allowed;
+        }
+
+        .select-container select option[disabled][selected] {
+          color: #b0b0b0;
+        }
+
+        /* Previews */
+        .form-group img, .form-group video {
+          margin-top: 0.5rem;
+          box-shadow: 0 2px 12px rgba(139,195,74,0.15);
+          border: 2px solid #8bc34a33;
+        }
+        /* Success Animation */
+        .success-anim-overlay {
+          position: fixed;
+          top: 0; left: 0; right: 0; bottom: 0;
+          background: rgba(0,0,0,0.45);
+          z-index: 9999;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          animation: fadeIn 0.3s;
+        }
+        .success-anim-container {
+          background: rgba(255,255,255,0.95);
+          border-radius: 18px;
+          padding: 2.5rem 3.5rem;
+          box-shadow: 0 8px 32px rgba(139,195,74,0.18);
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 1.2rem;
+          animation: popIn 0.5s cubic-bezier(.68,-0.55,.27,1.55);
+        }
+        .success-check {
+          width: 70px; height: 70px;
+          display: block;
+        }
+        .success-check-circle {
+          stroke: #8bc34a;
+          stroke-width: 3;
+          stroke-dasharray: 166;
+          stroke-dashoffset: 166;
+          animation: strokeCircle 0.6s forwards;
+        }
+        .success-check-check {
+          stroke: #8bc34a;
+          stroke-width: 3;
+          stroke-linecap: round;
+          stroke-dasharray: 48;
+          stroke-dashoffset: 48;
+          animation: strokeCheck 0.4s 0.5s forwards;
+        }
+        .success-msg {
+          color: #8bc34a;
+          font-size: 1.3rem;
+          font-weight: 600;
+          letter-spacing: 1px;
+        }
+        .success-anim-overlay.hide {
+          animation: fadeOut 0.8s forwards;
+        }
+        @keyframes strokeCircle {
+          to { stroke-dashoffset: 0; }
+        }
+        @keyframes strokeCheck {
+          to { stroke-dashoffset: 0; }
+        }
+        @keyframes popIn {
+          0% { transform: scale(0.7); opacity: 0; }
+          100% { transform: scale(1); opacity: 1; }
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes fadeOut {
+          to { opacity: 0; }
+        }
+        .redesigned-form {
+          display: flex;
+          flex-direction: column;
+          gap: 2.5rem;
+        }
+        .form-columns {
+          display: flex;
+          gap: 2.5rem;
+        }
+        .form-left, .form-right {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          gap: 2rem;
+        }
+        .card-input {
+          background: rgba(255,255,255,0.08);
+          border-radius: 16px;
+          box-shadow: 0 2px 12px rgba(139,195,74,0.08);
+          padding: 1.5rem 1.2rem 1.2rem 1.2rem;
+          border: 1.5px solid #8bc34a22;
+          transition: box-shadow 0.3s, border 0.3s;
+        }
+        .card-input:focus-within {
+          box-shadow: 0 4px 24px rgba(139,195,74,0.18);
+          border: 1.5px solid #8bc34a;
+        }
+        .input-icon {
+          margin-right: 0.5rem;
+          font-size: 1.1rem;
+        }
+        .file-status {
+          margin-top: 0.7rem;
+          min-height: 1.2rem;
+        }
+        .badge-success {
+          display: inline-block;
+          background: #8bc34a;
+          color: #fff;
+          font-size: 0.98rem;
+          font-weight: 600;
+          border-radius: 8px;
+          padding: 0.3rem 1.1rem;
+          box-shadow: 0 2px 8px rgba(139,195,74,0.13);
+          letter-spacing: 0.5px;
+          animation: popIn 0.4s;
+        }
+        @media (max-width: 900px) {
+          .form-columns {
+            flex-direction: column;
+            gap: 1.5rem;
+          }
+        }
+      </style>
+      <style>
+        @keyframes spin { 0% { transform: rotate(0deg);} 100% { transform: rotate(360deg);} }
+      </style>
+      <style>
+        #upload-loading {
+          display: none;
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100vw;
+          height: 100vh;
+          z-index: 99999;
+          background: rgba(15,23,42,0.97);
+          align-items: center;
+          justify-content: center;
+          flex-direction: column;
+          backdrop-filter: blur(2px);
+          transition: opacity 0.3s;
+        }
+        #upload-loading[style*="display: flex"] {
+          opacity: 1;
+          pointer-events: all;
+        }
+        #upload-loading-msg {
+          color: #8bc34a;
+          font-size: 1.5rem;
+          font-weight: 700;
+          letter-spacing: 1px;
+          text-shadow: 0 2px 12px #000b;
+          margin-top: 1.2rem;
+          text-align: center;
+        }
+        .seami-spinner {
+          margin-bottom: 1.2rem;
+          width: 70px;
+          height: 70px;
+          border: 8px solid #8bc34a33;
+          border-top: 8px solid #8bc34a;
+          border-radius: 50%;
+          animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg);} 100% { transform: rotate(360deg);} }
+      </style>
+    </body>
+  </html>
+</MainLayout>
