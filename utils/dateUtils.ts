@@ -15,17 +15,17 @@ export const formatTimeAgo = (date: Date): string => {
   if (diffMinutes < 60) return `hace ${diffMinutes} min`;
   if (diffHours < 24) return `hace ${diffHours} hora${diffHours !== 1 ? 's' : ''}`;
   if (diffDays < 7) return `hace ${diffDays} día${diffDays !== 1 ? 's' : ''}`;
-  
+
   if (diffDays < 30) {
     const weeks = Math.floor(diffDays / 7);
     return `hace ${weeks} semana${weeks > 1 ? 's' : ''}`;
   }
-  
+
   if (diffDays < 365) {
     const months = Math.floor(diffDays / 30);
     return `hace ${months} mes${months > 1 ? 'es' : ''}`;
   }
-  
+
   const years = Math.floor(diffDays / 365);
   return `hace ${years} año${years > 1 ? 's' : ''}`;
 };

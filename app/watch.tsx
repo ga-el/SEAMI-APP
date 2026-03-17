@@ -1,4 +1,4 @@
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ResizeMode, Video, VideoFullscreenUpdate } from 'expo-av';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { collection, doc, getDoc, getDocs, increment, query, updateDoc, setDoc, deleteDoc, where, onSnapshot } from 'firebase/firestore';
@@ -24,12 +24,12 @@ import { formatTimeAgo } from '../utils/dateUtils';
 
 // --- Componente Principal del Reproductor ---
 export default function WatchScreen() {
-  const navigation = useNavigation();
-  const route = useRoute<any>();
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const { isDarkTheme } = useContext(ThemeContext);
 
-  const videoId = route.params?.id;
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const videoId = id;
 
   // --- Estados del Componente ---
   const [videoData, setVideoData] = useState<any>(null);
@@ -41,6 +41,7 @@ export default function WatchScreen() {
   const [likeCount, setLikeCount] = useState(0);
   const [dislikeCount, setDislikeCount] = useState(0);
   const [selection, setSelection] = useState<'like' | 'dislike' | null>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
   const videoRef = useRef<Video>(null);
 
   // --- Efecto para Cargar los Datos del Video ---
@@ -124,8 +125,30 @@ export default function WatchScreen() {
     const currentUser = auth.currentUser;
     if (currentUser) {
       loadUserVote(currentUser.uid);
+      // Cargar el rol del usuario para el botón de regresar
+      getDoc(doc(db, 'users', currentUser.uid))
+        .then(docSnap => {
+          if (docSnap.exists()) {
+            setUserRole(docSnap.data().role);
+          }
+        })
+        .catch(err => console.error("Error cargando rol del usuario:", err));
     }
   }, [videoId]);
+
+  // --- Navegación Segura al Dashboard ---
+  const handleGoBack = () => {
+    // Para salir de la pila de videos amontonados y volver a la raíz absoluta
+    if (router.canGoBack()) {
+      router.dismissAll();
+    }
+    
+    if (userRole === 'profesor') {
+      router.replace('/dashboard-teacher');
+    } else {
+      router.replace('/dashboard');
+    }
+  };
 
   // --- Efecto para Cargar Videos Recomendados ---
   useEffect(() => {
@@ -223,8 +246,8 @@ export default function WatchScreen() {
       <View style={[styles.centeredContainer, isDarkTheme ? styles.containerDark : styles.containerLight]}>
         <Ionicons name="alert-circle-outline" size={48} color="red" />
         <Text style={styles.errorText}>{error}</Text>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Text style={styles.backButtonText}>Regresar</Text>
+        <TouchableOpacity onPress={handleGoBack} style={styles.backButton}>
+          <Text style={styles.backButtonText}>Regresar al inicio</Text>
         </TouchableOpacity>
       </View>
     );
@@ -236,7 +259,7 @@ export default function WatchScreen() {
     <SafeAreaView style={[styles.flexContainer, isDarkTheme ? styles.containerDark : styles.containerLight]}>
       {/* --- HEADER --- */}
       <View style={[isDarkTheme ? styles.headerDark : styles.headerLight, { paddingTop: insets.top || 16 }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBackButton}>
+        <TouchableOpacity onPress={handleGoBack} style={styles.headerBackButton}>
           <Ionicons name="arrow-back" size={24} color={isDarkTheme ? '#8bc34a' : '#0f172a'} />
         </TouchableOpacity>
         <Text style={isDarkTheme ? styles.appNameDark : styles.appNameLight}>SEAMI</Text>
@@ -306,7 +329,7 @@ export default function WatchScreen() {
               <TouchableOpacity
                 key={rec.id}
                 style={[styles.recommendationCard, isDarkTheme ? styles.videoCardDark : styles.videoCardLight]}
-                onPress={() => navigation.push('Watch', { id: rec.id })}
+                onPress={() => router.push({ pathname: '/watch', params: { id: rec.id } })}
               >
                 <View style={styles.thumbnailContainer}>
                   {rec.thumbnailUrl ? (

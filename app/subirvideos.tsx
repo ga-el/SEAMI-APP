@@ -271,6 +271,10 @@ export default function SubirVideosScreen() {
 
       // Save to Firestore
       setUploadProgress('Guardando información...');
+      // Helper para normalizar texto de búsqueda
+      const normalizeForSearch = (str: string) =>
+        str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+
       const videoData = {
         title: formData.title,
         description: formData.description,
@@ -292,6 +296,9 @@ export default function SubirVideosScreen() {
         dislikes: 0,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
+        // Campos para búsqueda en Firestore (range queries)
+        titleLower: normalizeForSearch(formData.title),
+        instructorLower: normalizeForSearch(profesor),
       };
 
       await addDoc(collection(db, 'videos'), videoData);

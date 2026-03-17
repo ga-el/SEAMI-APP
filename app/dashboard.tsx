@@ -1,14 +1,17 @@
 import { useRouter } from 'expo-router';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { collection, getDocs, orderBy, query } from 'firebase/firestore';
-import React, { useContext, useEffect, useState } from 'react';
-import { Alert, FlatList, Image, SafeAreaView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { collection, getDocs, limit, orderBy, query, where } from 'firebase/firestore';
+import React, { useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, FlatList, Image, SafeAreaView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import BottomNav from '../components/BottomNav';
 import { initializeFirebase } from '../firebase-config';
 import { ThemeContext } from './_layout';
 import { formatTimeAgo } from '../utils/dateUtils';
 const { auth, db } = initializeFirebase();
+
+// Cantidad de videos a cargar en la pantalla inicial
+const INITIAL_LOAD_LIMIT = 20;
 
 interface VideoItem {
   id: string;
@@ -30,7 +33,154 @@ export default function DashboardScreen() {
   const [filteredVideos, setFilteredVideos] = useState<VideoItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
+  const [searching, setSearching] = useState(false);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // ─── Helpers ────────────────────────────────────────────────────────────────
+  function normalizeString(str: string) {
+    return str
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim();
+  }
+
+  function docToVideoItem(docSnap: any): VideoItem {
+    const data = docSnap.data();
+    return {
+      id: docSnap.id,
+      title: data.title || 'Sin título',
+      instructor: data.profesor || data.autor?.nombre || data.instructor || 'Desconocido',
+      views: `${data.views || 0} vistas`,
+      time: formatTimeAgo(
+        data.createdAt
+          ? data.createdAt.toDate
+            ? data.createdAt.toDate()
+            : new Date(data.createdAt)
+          : new Date()
+      ),
+      duration: data.duration || '0:00',
+      thumbnailUrl: data.thumbnailUrl || null,
+    };
+  }
+
+  // ─── Carga inicial (paginada) ─────────────────────────────────────────────
+  const loadInitialVideos = useCallback(async () => {
+    try {
+      setLoading(true);
+      const q = query(
+        collection(db, 'videos'),
+        orderBy('createdAt', 'desc'),
+        limit(INITIAL_LOAD_LIMIT)
+      );
+      const snapshot = await getDocs(q);
+      const data = snapshot.docs.map(docToVideoItem);
+      setVideos(data);
+      setFilteredVideos(data);
+    } catch (error) {
+      console.error('Error cargando videos:', error);
+      Alert.alert('Error', 'No se pudieron cargar los videos.');
+      setVideos([]);
+      setFilteredVideos([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // ─── Búsqueda en Firebase ────────────────────────────────────────────────
+  const searchInFirebase = useCallback(async (rawQuery: string) => {
+    const norm = normalizeString(rawQuery);
+    if (!norm) return;
+
+    setSearching(true);
+    try {
+      // Prefijo para range query: busca títulos que empiecen con la query
+      const prefixEnd = norm.slice(0, -1) + String.fromCharCode(norm.charCodeAt(norm.length - 1) + 1);
+
+      // Query 1: por título (lowercase)
+      const titleQuery = query(
+        collection(db, 'videos'),
+        where('titleLower', '>=', norm),
+        where('titleLower', '<', prefixEnd),
+        limit(50)
+      );
+
+      // Query 2: por instructor (lowercase)
+      const instructorQuery = query(
+        collection(db, 'videos'),
+        where('instructorLower', '>=', norm),
+        where('instructorLower', '<', prefixEnd),
+        limit(50)
+      );
+
+      const [titleSnap, instructorSnap] = await Promise.all([
+        getDocs(titleQuery),
+        getDocs(instructorQuery),
+      ]);
+
+      // Unir resultados sin duplicados
+      const seen = new Set<string>();
+      const results: VideoItem[] = [];
+
+      const addDocs = (snap: any) => {
+        snap.docs.forEach((d: any) => {
+          if (!seen.has(d.id)) {
+            seen.add(d.id);
+            results.push(docToVideoItem(d));
+          }
+        });
+      };
+
+      addDocs(titleSnap);
+      addDocs(instructorSnap);
+
+      // Si no hay resultados con campos lowercase, hacer búsqueda local sobre los videos iniciales
+      // (compatibilidad con documentos que no tienen titleLower)
+      if (results.length === 0) {
+        const fallback = videos.filter(
+          (v) =>
+            normalizeString(v.title).includes(norm) ||
+            normalizeString(v.instructor).includes(norm)
+        );
+        setFilteredVideos(fallback);
+      } else {
+        setFilteredVideos(results);
+      }
+    } catch (error) {
+      console.error('Error en búsqueda Firebase:', error);
+      // Fallback: filtrar localmente si Firebase falla
+      const fallback = videos.filter(
+        (v) =>
+          normalizeString(v.title).includes(normalizeString(rawQuery)) ||
+          normalizeString(v.instructor).includes(normalizeString(rawQuery))
+      );
+      setFilteredVideos(fallback);
+    } finally {
+      setSearching(false);
+    }
+  }, [videos]);
+
+  // ─── Manejo del input de búsqueda (con debounce) ─────────────────────────
+  const handleSearchChange = useCallback((text: string) => {
+    setSearchQuery(text);
+
+    if (searchDebounceRef.current) {
+      clearTimeout(searchDebounceRef.current);
+    }
+
+    if (!text.trim()) {
+      setFilteredVideos(videos);
+      setSearching(false);
+      return;
+    }
+
+    setSearching(true);
+    searchDebounceRef.current = setTimeout(() => {
+      searchInFirebase(text.trim());
+    }, 400);
+  }, [videos, searchInFirebase]);
+
+  // ─── Auth y carga inicial ────────────────────────────────────────────────
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (!user) {
@@ -59,33 +209,7 @@ export default function DashboardScreen() {
         router.replace('/login');
         return;
       }
-      // Cargar videos
-      try {
-        setLoading(true);
-        const q = query(collection(db, 'videos'), orderBy('createdAt', 'desc'));
-        const querySnapshot = await getDocs(q);
-        const videosData: VideoItem[] = [];
-        querySnapshot.forEach((doc) => {
-          const data = doc.data();
-          videosData.push({
-            id: doc.id,
-            title: data.title || 'Sin título',
-            instructor: data.profesor || data.autor?.nombre || data.instructor || 'Desconocido',
-            views: `${data.views || 0} vistas`,
-            time: formatTimeAgo(data.createdAt ? (data.createdAt.toDate ? data.createdAt.toDate() : new Date(data.createdAt)) : new Date()),
-            duration: data.duration || '0:00',
-            thumbnailUrl: data.thumbnailUrl || null,
-          });
-        });
-        setVideos(videosData);
-        setFilteredVideos(videosData);
-      } catch (error) {
-        console.error('Error cargando videos:', error);
-        Alert.alert('Error', 'No se pudieron cargar los videos.');
-        setVideos([]);
-      } finally {
-        setLoading(false);
-      }
+      await loadInitialVideos();
     });
     return unsubscribe;
   }, []);
@@ -134,29 +258,7 @@ export default function DashboardScreen() {
     </TouchableOpacity>
   );
 
-  // Filtrar videos cuando cambia la búsqueda o la lista de videos
-  // Función para normalizar strings y quitar acentos/diacríticos
-  function normalizeString(str: string) {
-    return str
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '') // quitar diacríticos
-      .toLowerCase();
-  }
 
-  useEffect(() => {
-    if (searchQuery.trim() === '') {
-      setFilteredVideos(videos);
-    } else {
-      const normQuery = normalizeString(searchQuery);
-      setFilteredVideos(
-        videos.filter(
-          (v) =>
-            normalizeString(v.title).includes(normQuery) ||
-            normalizeString(v.instructor).includes(normQuery)
-        )
-      );
-    }
-  }, [searchQuery, videos]);
 
   return (
     <SafeAreaView style={isDarkTheme ? styles.containerDark : styles.containerLight}>
@@ -181,10 +283,18 @@ export default function DashboardScreen() {
           placeholderTextColor={isDarkTheme ? '#aaa' : '#666'}
           style={isDarkTheme ? styles.searchInputDark : styles.searchInputLight}
           value={searchQuery}
-          onChangeText={setSearchQuery}
+          onChangeText={handleSearchChange}
           autoCorrect={false}
           autoCapitalize="none"
+          returnKeyType="search"
         />
+        {searching && (
+          <ActivityIndicator
+            size="small"
+            color="#8bc34a"
+            style={{ position: 'absolute', right: 14, top: '30%' }}
+          />
+        )}
       </View>
 
       {/* Grilla de videos */}
