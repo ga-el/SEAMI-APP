@@ -22,7 +22,6 @@ const { auth, db } = initializeFirebase();
 
 interface SubjectRow {
   subject: string;
-  semester: string;
 }
 
 interface CompleteProfileForm {
@@ -42,11 +41,11 @@ interface FormErrors {
 }
 
 const initialSubjects = [
-  { subject: '', semester: '' },
-  { subject: '', semester: '' },
-  { subject: '', semester: '' },
-  { subject: '', semester: '' },
-  { subject: '', semester: '' },
+  { subject: '' },
+  { subject: '' },
+  { subject: '' },
+  { subject: '' },
+  { subject: '' },
 ];
 
 export const options = {
@@ -114,7 +113,7 @@ export default function CompleteProfileTeacherScreen() {
   const addSubjectRow = () => {
     setForm((prev) => ({
       ...prev,
-      subjects: [...prev.subjects, { subject: '', semester: '' }],
+      subjects: [...prev.subjects, { subject: '' }],
     }));
   };
 
@@ -132,11 +131,11 @@ export default function CompleteProfileTeacherScreen() {
     if (!form.first_name.trim()) newErrors.first_name = 'Por favor ingresa tu nombre.';
     if (!form.last_name.trim()) newErrors.last_name = 'Por favor ingresa tu apellido paterno.';
     
-    // Validar que al menos una materia tenga ambos campos llenos
+    // Validar que al menos una materia tenga nombre
     const hasValidSubject = form.subjects.some(
-      (s) => s.subject.trim() && s.semester.trim()
+      (s) => s.subject.trim()
     );
-    if (!hasValidSubject) newErrors.subjects = 'Agrega al menos una materia y su semestre.';
+    if (!hasValidSubject) newErrors.subjects = 'Agrega al menos una materia.';
     
     return newErrors;
   };
@@ -156,7 +155,7 @@ export default function CompleteProfileTeacherScreen() {
         
         // Filtrar materias vacías
         const validSubjects = form.subjects.filter(
-          s => s.subject.trim() && s.semester.trim()
+          s => s.subject.trim()
         );
         
         // Guardar datos en Firestore
@@ -283,7 +282,7 @@ export default function CompleteProfileTeacherScreen() {
             Materias Asignadas
           </Text>
           <Text style={isDarkTheme ? styles.subtextDark : styles.subtextLight}>
-            Escribe cada materia con su semestre:
+            Escribe las materias que impartes:
           </Text>
           <View style={styles.subjectsContainer}>
             {form.subjects.map((row, idx) => (
@@ -294,17 +293,7 @@ export default function CompleteProfileTeacherScreen() {
                   onChangeText={(text) => handleSubjectChange(idx, 'subject', text)}
                   style={[
                     isDarkTheme ? styles.subjectInputDark : styles.subjectInputLight,
-                    errors.subjects && !row.subject.trim() && !row.semester.trim() && styles.inputError,
-                  ]}
-                  placeholderTextColor={isDarkTheme ? '#aaa' : '#888'}
-                />
-                <TextInput
-                  placeholder={`Semestre`}
-                  value={row.semester}
-                  onChangeText={(text) => handleSubjectChange(idx, 'semester', text)}
-                  style={[
-                    isDarkTheme ? styles.subjectInputDark : styles.subjectInputLight,
-                    errors.subjects && !row.subject.trim() && !row.semester.trim() && styles.inputError,
+                    errors.subjects && !row.subject.trim() && styles.inputError,
                   ]}
                   placeholderTextColor={isDarkTheme ? '#aaa' : '#888'}
                 />

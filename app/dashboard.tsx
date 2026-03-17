@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import BottomNav from '../components/BottomNav';
 import { initializeFirebase } from '../firebase-config';
 import { ThemeContext } from './_layout';
+import { formatTimeAgo } from '../utils/dateUtils';
 const { auth, db } = initializeFirebase();
 
 interface VideoItem {
@@ -19,11 +20,7 @@ interface VideoItem {
   thumbnailUrl?: string | null;
 }
 
-
-
-
 export const options = { headerShown: false };
-
 
 export default function DashboardScreen() {
   const router = useRouter();
@@ -73,9 +70,9 @@ export default function DashboardScreen() {
           videosData.push({
             id: doc.id,
             title: data.title || 'Sin título',
-            instructor: data.instructor || 'Desconocido',
+            instructor: data.profesor || data.autor?.nombre || data.instructor || 'Desconocido',
             views: `${data.views || 0} vistas`,
-            time: formatTimeAgo(data.createdAt?.toDate ? data.createdAt.toDate() : new Date()),
+            time: formatTimeAgo(data.createdAt ? (data.createdAt.toDate ? data.createdAt.toDate() : new Date(data.createdAt)) : new Date()),
             duration: data.duration || '0:00',
             thumbnailUrl: data.thumbnailUrl || null,
           });
@@ -93,27 +90,7 @@ export default function DashboardScreen() {
     return unsubscribe;
   }, []);
 
-  const formatTimeAgo = (date: Date): string => {
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-    const diffMinutes = Math.floor(diffMs / (1000 * 60));
-    if (diffMinutes < 1) return 'ahora';
-    if (diffMinutes < 60) return `hace ${diffMinutes} min`;
-    if (diffHours < 24) return `hace ${diffHours} horas`;
-    if (diffDays < 7) return `hace ${diffDays} días`;
-    if (diffDays < 30) {
-      const weeks = Math.floor(diffDays / 7);
-      return `hace ${weeks} semana${weeks > 1 ? 's' : ''}`;
-    }
-    if (diffDays < 365) {
-      const months = Math.floor(diffDays / 30);
-      return `hace ${months} mes${months > 1 ? 'es' : ''}`;
-    }
-    const years = Math.floor(diffDays / 365);
-    return `hace ${years} año${years > 1 ? 's' : ''}`;
-  };
+  const [showDropdown, setShowDropdown] = useState(false);
 
   const toggleDropdown = () => setShowDropdown(!showDropdown);
 

@@ -74,9 +74,11 @@ const CenterButton: React.FC<CenterButtonProps> = ({
       switch (currentRoute) {
         case ROUTES.DASHBOARD:
           return (
-            <Text style={[styles.centerButtonIcon, { fontSize: 28 }]}>
-              🧘
-            </Text>
+            <Ionicons
+              name="body"
+              size={28}
+              style={styles.centerButtonIcon}
+            />
           );
         case ROUTES.DASHBOARD_TEACHER:
           return (

@@ -1,0 +1,415 @@
+---
+// src/pages/edit-profile.astro
+import EditProfileFormTeacher from '../components/EditProfileFormTeacher.jsx';
+import MainLayout from '../layouts/MainLayout.astro';
+---
+
+<MainLayout>
+  <html lang="es">
+    <head>
+      <meta charset="UTF-8" />
+      <title>SEAMI - Editar Perfil</title>
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <link href="https://fonts.googleapis.com/css2?family=Segoe+UI:wght@400;500;600;700&display=swap" rel="stylesheet">
+    </head>
+
+    <body class="dark-mode">
+      <!-- Header -->
+      <header class="header">
+        <a href="/dashboard-profesor" class="logo-container">
+          <span class="logo">SEAMI</span>
+          <span class="logo-subtitle">SISTEMA EDUCATIVO MULTIMEDIA E INTERACTIVO</span>
+        </a>
+  
+        <div class="actions">
+          <!-- Botón de SEAMI ZEN mejorado -->
+        
+          <!-- Botón para cambiar tema -->
+          <button id="toggle-theme" class="theme-toggle">🌙</button>
+  
+          <!-- Botón de perfil con menú desplegable -->
+          <div class="profile-dropdown">
+            <button id="profile-btn" class="profile-icon">
+              <div class="avatar-container" style="width:40px;height:40px;display:flex;align-items:center;justify-content:center;">
+                <img id="profile-avatar" src="/img/avatar_default.webp" alt="Avatar" class="avatar" style="width:25px;height:25px;border-radius:50%;object-fit:cover;border:2px solid #8bc34a;background:#fff;box-shadow:0 0 0 2px #fff;" onerror="this.style.display='none';document.getElementById('avatar-fallback').style.display='flex';" />
+                <div class="avatar-fallback" id="avatar-fallback" style="display:none;align-items:center;justify-content:center;font-size:1.2rem;font-weight:bold;background:#fff;color:#8bc34a;width:40px;height:40px;border-radius:50%;border:2px solid #8bc34a;box-shadow:0 0 0 2px #fff;position:absolute;top:0;left:0;">--</div>
+              </div>
+            </button>
+            <div id="dropdown-menu" class="dropdown-content hidden">
+              <a href="/profile-profesor" class="dropdown-item">Ver Perfil</a>
+              <a href="/logout" class="dropdown-item">Cerrar Sesión</a>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main>
+        <EditProfileFormTeacher client:only="react" />
+      </main>
+
+      <!-- Script para modo oscuro -->
+      <script is:inline>
+        document.addEventListener('DOMContentLoaded', () => {
+          const toggleBtn = document.getElementById("toggle-theme");
+          const body = document.body;
+
+          function applyTheme(isDark) {
+            toggleBtn.classList.add('changing');
+            body.classList.toggle("light-mode", !isDark);
+            toggleBtn.textContent = isDark ? "🌙" : "☀️";
+            localStorage.setItem("theme", isDark ? "dark" : "light");
+            
+            setTimeout(() => {
+              toggleBtn.classList.remove('changing');
+            }, 500);
+          }
+
+          const savedTheme = localStorage.getItem("theme");
+          if (savedTheme === "light") {
+            applyTheme(false);
+          } else {
+            applyTheme(true);
+          }
+
+          toggleBtn.addEventListener("click", () => {
+            const isDark = !body.classList.contains("light-mode");
+            applyTheme(!isDark);
+          });
+        });
+      </script>
+
+      <!-- Script para el menú desplegable -->
+      <script is:inline>
+        const profileBtn = document.getElementById("profile-btn");
+        const dropdownMenu = document.getElementById("dropdown-menu");
+
+        profileBtn.addEventListener("click", () => {
+          dropdownMenu.classList.toggle("hidden");
+        });
+
+        document.addEventListener("click", function (event) {
+          if (
+            !profileBtn.contains(event.target) &&
+            !dropdownMenu.contains(event.target)
+          ) {
+            dropdownMenu.classList.add("hidden");
+          }
+        });
+      </script>
+
+      <style>
+        * {
+          margin: 0;
+          padding: 0;
+          box-sizing: border-box;
+          font-family: "Segoe UI", sans-serif;
+        }
+
+        main {
+          width: 100%;
+          padding-top: 80px; /* Space for the fixed header */
+        }
+
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        @keyframes slideIn {
+          from {
+            opacity: 0;
+            transform: translateX(-50px);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0);
+          }
+        }
+
+        body {
+          min-height: 100vh;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: flex-start;
+          background: linear-gradient(to right bottom, #0f172a, #3a2443);
+          color: white;
+          transition: all 0.4s ease;
+          animation: fadeIn 0.8s ease-out;
+        }
+
+        body.light-mode {
+          background: linear-gradient(135deg, #f5f7fa 0%, #e4e8f0 100%);
+          color: #2d3748;
+        }
+
+        .header {
+          position: fixed;
+          top: 0;
+          width: 100%;
+          z-index: 1000;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          background-color: rgba(0, 0, 0, 0.6);
+          backdrop-filter: blur(10px);
+          padding: 0.8rem 2rem;
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+          transition: all 0.4s ease;
+        }
+
+        body.light-mode .header {
+          background-color: rgba(255, 255, 255, 0.95);
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+          border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+        }
+
+        .actions {
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+        }
+
+        @keyframes subtitleGlow {
+          0%, 100% {
+            text-shadow: 0 0 8px rgba(139, 195, 74, 0.6);
+          }
+          50% {
+            text-shadow: 0 0 15px rgba(139, 195, 74, 0.9), 0 0 25px rgba(139, 195, 74, 0.5);
+          }
+        }
+        @keyframes letterSpacing {
+          0% {
+            letter-spacing: 0px;
+          }
+          100% {
+            letter-spacing: 2px;
+          }
+        }
+        .logo-container {
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          text-decoration: none;
+          cursor: pointer;
+          min-height: 40px;
+        }
+        .logo {
+          font-size: 1.7rem;
+          font-weight: bold;
+          color: #8bc34a;
+          transition: all 0.3s ease;
+          line-height: 1;
+        }
+        .logo-subtitle {
+          font-size: 0.65rem;
+          color: #8bc34a;
+          opacity: 0;
+          max-height: 0;
+          overflow: hidden;
+          transform: translateY(-8px) scale(0.9);
+          transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+          white-space: nowrap;
+          margin-top: 0;
+          font-weight: 600;
+          letter-spacing: 0px;
+          line-height: 1;
+        }
+        .logo-container:hover .logo {
+          color: #9ccc65;
+          transform: scale(1.05);
+          text-shadow: 0 0 10px rgba(139, 195, 74, 0.3);
+        }
+        .logo-container:hover .logo-subtitle {
+          opacity: 1;
+          max-height: 20px;
+          margin-top: 0.2rem;
+          transform: translateY(0) scale(1);
+          animation: subtitleGlow 2s ease-in-out infinite, letterSpacing 0.4s ease-out forwards;
+        }
+
+        .theme-toggle {
+          font-size: 1.2rem;
+          line-height: 1;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          height: 2.2rem;
+          width: 2.2rem;
+          padding: 0;
+          background: transparent;
+          border: none;
+          border-radius: 50%;
+          color: rgba(100, 181, 246, 0.7);
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          box-shadow: none;
+          outline: none;
+          opacity: 0.85;
+          transform-origin: center;
+          cursor: pointer;
+        }
+
+        .theme-toggle:hover {
+          background: rgba(100, 181, 246, 0.08);
+          color: rgba(100, 181, 246, 1);
+          transform: scale(1.08) rotate(5deg);
+          opacity: 1;
+        }
+
+        .theme-toggle:active {
+          transform: scale(0.95) rotate(-10deg);
+          transition: all 0.1s ease;
+        }
+
+        @keyframes themeToggleSpin {
+          0% {
+            transform: rotate(0deg);
+          }
+          100% {
+            transform: rotate(360deg);
+          }
+        }
+
+        .theme-toggle.changing {
+          animation: themeToggleSpin 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .profile-dropdown {
+          position: relative;
+        }
+
+        .profile-icon {
+          font-size: 1.2rem;
+          line-height: 1;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          height: 2.2rem;
+          width: 2.2rem;
+          padding: 0;
+          background: transparent;
+          border: none;
+          border-radius: 50%;
+          color: rgba(100, 181, 246, 0.7);
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          box-shadow: none;
+          outline: none;
+          opacity: 0.85;
+          transform-origin: center;
+          cursor: pointer;
+        }
+
+        .profile-icon:hover {
+          background: rgba(100, 181, 246, 0.08);
+          color: rgba(100, 181, 246, 1);
+          transform: scale(1.08) rotate(5deg);
+          opacity: 1;
+        }
+
+        .dropdown-content {
+          position: absolute;
+          right: 0;
+          top: 2.5rem;
+          background: rgba(255, 255, 255, 0.1);
+          min-width: 150px;
+          border-radius: 8px;
+          box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+          backdrop-filter: blur(10px);
+          border: 1px solid rgba(255, 255, 255, 0.15);
+          z-index: 1000;
+          transition: all 0.4s ease;
+        }
+
+        body.light-mode .dropdown-content {
+          background: rgba(255, 255, 255, 0.98);
+          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+          border: 1px solid rgba(0, 0, 0, 0.08);
+        }
+
+        .dropdown-content.hidden {
+          display: none;
+        }
+
+        .dropdown-item {
+          color: white;
+          padding: 0.75rem 1rem;
+          text-decoration: none;
+          display: block;
+          transition: all 0.3s ease;
+        }
+
+        body.light-mode .dropdown-item {
+          color: #2d3748;
+        }
+
+        .dropdown-item:hover {
+          background-color: rgba(255, 255, 255, 0.1);
+        }
+
+        body.light-mode .dropdown-item:hover {
+          background-color: rgba(66, 153, 225, 0.1);
+          color: #3182ce;
+        }
+
+        .hidden {
+          display: none;
+        }
+
+        @media (max-width: 600px) {
+          .header {
+            padding: 0.6rem 0.8rem;
+          }
+          .logo {
+            font-size: 1.3rem;
+          }
+          .theme-toggle,
+          .profile-icon {
+            height: 2rem;
+            width: 2rem;
+            font-size: 1rem;
+          }
+          .profile-icon img,
+          .avatar-fallback {
+            width: 32px !important;
+            height: 32px !important;
+            font-size: 1rem !important;
+          }
+          main {
+            padding-top: 70px;
+          }
+        }
+        
+        /* Fix light mode text colors */
+        body.light-mode {
+          color: #2d3748 !important;
+        }
+        body.light-mode .glass-container {
+          color: #2d3748 !important;
+        }
+        body.light-mode .glass-container *,
+        body.light-mode .glass-container h2,
+        body.light-mode .glass-container p,
+        body.light-mode .glass-container label,
+        body.light-mode .glass-container div {
+          color: #2d3748 !important;
+        }
+        body.light-mode .glass-container input,
+        body.light-mode .glass-container select,
+        body.light-mode .glass-container textarea {
+          color: #2d3748 !important;
+          background: rgba(255, 255, 255, 0.8) !important;
+        }
+        body.light-mode .glass-container input::placeholder,
+        body.light-mode .glass-container textarea::placeholder {
+          color: #718096 !important;
+        }
+      </style>
+    </body>
+  </html>
+</MainLayout> 

@@ -52,6 +52,7 @@ export const ROUTES = {
   DASHBOARD: '/dashboard',
   DASHBOARD_TEACHER: '/dashboard-teacher',
   PROFILE: '/profile',
+  PROFILE_TEACHER: '/profile-teacher',
   SUBIR_VIDEOS: '/subirvideos'
 } as const;
 

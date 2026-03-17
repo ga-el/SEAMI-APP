@@ -21,36 +21,38 @@ const BottomNav: React.FC<BottomNavProps> = ({ style, testID }) => {
   const pathname = usePathname();
   const styles = createStyles(isDarkTheme);
   
-  // Determine target dashboard based on current route
-  const isTeacherDashboard = pathname === ROUTES.DASHBOARD_TEACHER;
+  // Detect any teacher-related route (dashboard OR profile)
+  const isTeacherRoute =
+    pathname === ROUTES.DASHBOARD_TEACHER ||
+    pathname === ROUTES.PROFILE_TEACHER;
 
   // Navigation handlers with error handling
   const handleHomePress = useCallback(() => {
     try {
-      // If we're already on teacher dashboard, stay there, otherwise go to student dashboard
-      const targetRoute = isTeacherDashboard ? ROUTES.DASHBOARD_TEACHER : ROUTES.DASHBOARD;
+      const targetRoute = isTeacherRoute ? ROUTES.DASHBOARD_TEACHER : ROUTES.DASHBOARD;
       router.push(targetRoute);
     } catch (error) {
       console.error('Navigation error to dashboard:', error);
-      // Fallback navigation
-      const targetRoute = isTeacherDashboard ? ROUTES.DASHBOARD_TEACHER : ROUTES.DASHBOARD;
+      const targetRoute = isTeacherRoute ? ROUTES.DASHBOARD_TEACHER : ROUTES.DASHBOARD;
       router.replace(targetRoute);
     }
-  }, [router, isTeacherDashboard]);
+  }, [router, isTeacherRoute]);
 
   const handleProfilePress = useCallback(() => {
     try {
-      router.push(ROUTES.PROFILE);
+      // Teachers always go to their own profile screen
+      const targetRoute = isTeacherRoute ? ROUTES.PROFILE_TEACHER : ROUTES.PROFILE;
+      router.push(targetRoute);
     } catch (error) {
       console.error('Navigation error to profile:', error);
-      // Fallback navigation
-      router.replace(ROUTES.PROFILE);
+      const targetRoute = isTeacherRoute ? ROUTES.PROFILE_TEACHER : ROUTES.PROFILE;
+      router.replace(targetRoute);
     }
-  }, [router]);
+  }, [router, isTeacherRoute]);
 
   // Route detection with fallback
   const isHomeActive = pathname === ROUTES.DASHBOARD || pathname === ROUTES.DASHBOARD_TEACHER || pathname === '/';
-  const isProfileActive = pathname === ROUTES.PROFILE;
+  const isProfileActive = pathname === ROUTES.PROFILE || pathname === ROUTES.PROFILE_TEACHER;
 
   return (
     <BottomNavErrorBoundary>

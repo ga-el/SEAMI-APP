@@ -1,0 +1,545 @@
+---
+// src/pages/complete-profile-profesor.astro
+import CompleteProfileFormTeacher from '../components/CompleteProfileFormTeacher.jsx';
+import MainLayout from '../layouts/MainLayout.astro';
+---
+
+  <html lang="es">
+    <head>
+      <meta charset="UTF-8" />
+      <title>SEAMI - Completa tu Perfil</title>
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <link rel="icon" type="image/webp" href="/logo.webp" />
+      <link href="https://fonts.googleapis.com/css2?family=Segoe+UI:wght@400;500;600;700&display=swap" rel="stylesheet">
+    </head>
+
+    <body class="dark-mode">
+      <!-- Header -->
+      <header class="header">
+        <a href="/" class="logo-container">
+          <span class="logo">SEAMI</span>
+          <span class="logo-subtitle">SISTEMA EDUCATIVO MULTIMEDIA E INTERACTIVO</span>
+        </a>
+        <div class="actions">
+          <button id="toggle-theme" class="theme-toggle">🌙</button>
+        </div>
+      </header>
+
+      <main>
+        <section class="form-container">
+          <CompleteProfileFormTeacher client:only="react" />
+        </section>
+      </main>
+
+      <!-- Script para modo oscuro -->
+      <script is:inline>
+        document.addEventListener('DOMContentLoaded', () => {
+          const toggleBtn = document.getElementById("toggle-theme");
+          const body = document.body;
+
+          function applyTheme(isDark) {
+            toggleBtn.classList.add('changing');
+            body.classList.toggle("light-mode", !isDark);
+            toggleBtn.textContent = isDark ? "🌙" : "☀️";
+            localStorage.setItem("theme", isDark ? "dark" : "light");
+            
+            setTimeout(() => {
+              toggleBtn.classList.remove('changing');
+            }, 500);
+          }
+
+          const savedTheme = localStorage.getItem("theme");
+          if (savedTheme === "light") {
+            applyTheme(false);
+          } else {
+            applyTheme(true);
+          }
+
+          toggleBtn.addEventListener("click", () => {
+            const isDark = !body.classList.contains("light-mode");
+            applyTheme(!isDark);
+          });
+        });
+      </script>
+
+      <style>
+        * {
+          margin: 0;
+          padding: 0;
+          box-sizing: border-box;
+          font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, "Roboto", sans-serif;
+        }
+
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+            transform: translateY(30px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        @keyframes slideIn {
+          from {
+            opacity: 0;
+            transform: translateX(-50px);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0);
+          }
+        }
+
+        @keyframes floatAnimation {
+          0%, 100% {
+            transform: translateY(0px);
+          }
+          50% {
+            transform: translateY(-10px);
+          }
+        }
+
+        @keyframes gradientShift {
+          0% {
+            background-position: 0% 50%;
+          }
+          50% {
+            background-position: 100% 50%;
+          }
+          100% {
+            background-position: 0% 50%;
+          }
+        }
+
+        body {
+          min-height: 100vh;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: flex-start;
+          background: linear-gradient(-45deg, #0f172a, #1e293b, #3a2443, #2d1b69);
+          background-size: 400% 400%;
+          animation: gradientShift 15s ease infinite;
+          color: white;
+          transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+          position: relative;
+          overflow-x: hidden;
+        }
+
+        body::before {
+          content: '';
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          background: radial-gradient(circle at 20% 80%, rgba(139, 195, 74, 0.1) 0%, transparent 50%),
+                      radial-gradient(circle at 80% 20%, rgba(139, 195, 74, 0.08) 0%, transparent 50%),
+                      radial-gradient(circle at 40% 40%, rgba(255, 255, 255, 0.02) 0%, transparent 50%);
+          pointer-events: none;
+          z-index: 1;
+        }
+
+        body.light-mode {
+          background: linear-gradient(-45deg, #f8fafc, #e2e8f0, #f1f5f9, #e4e7eb);
+          background-size: 400% 400%;
+          animation: gradientShift 20s ease infinite;
+          color: #1a202c;
+        }
+
+        body.light-mode::before {
+          background: radial-gradient(circle at 20% 80%, rgba(139, 195, 74, 0.05) 0%, transparent 50%),
+                      radial-gradient(circle at 80% 20%, rgba(139, 195, 74, 0.03) 0%, transparent 50%),
+                      radial-gradient(circle at 40% 40%, rgba(0, 0, 0, 0.01) 0%, transparent 50%);
+        }
+
+        .header {
+          position: fixed;
+          top: 0;
+          width: 100%;
+          z-index: 1000;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          background: rgba(15, 23, 42, 0.8);
+          backdrop-filter: blur(20px) saturate(180%);
+          padding: 0.8rem 2rem;
+          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3),
+                      0 1px 0 rgba(255, 255, 255, 0.1) inset;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+          transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        body.light-mode .header {
+          background: rgba(255, 255, 255, 0.9);
+          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.06),
+                      0 1px 0 rgba(0, 0, 0, 0.05) inset;
+          border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+        }
+
+        .actions {
+          display: flex;
+          align-items: center;
+          gap: 1.5rem;
+        }
+
+        @keyframes subtitleGlow {
+          0%, 100% {
+            text-shadow: 0 0 8px rgba(139, 195, 74, 0.6);
+          }
+          50% {
+            text-shadow: 0 0 15px rgba(139, 195, 74, 0.9), 0 0 25px rgba(139, 195, 74, 0.5);
+          }
+        }
+        @keyframes letterSpacing {
+          0% {
+            letter-spacing: 0px;
+          }
+          100% {
+            letter-spacing: 2px;
+          }
+        }
+        .logo-container {
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          text-decoration: none;
+          cursor: pointer;
+          min-height: 40px;
+        }
+        .logo {
+          font-size: 1.7rem;
+          font-weight: bold;
+          color: #8bc34a;
+          transition: all 0.3s ease;
+          line-height: 1;
+        }
+        .logo-subtitle {
+          font-size: 0.65rem;
+          color: #8bc34a;
+          opacity: 0;
+          max-height: 0;
+          overflow: hidden;
+          transform: translateY(-8px) scale(0.9);
+          transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+          white-space: nowrap;
+          margin-top: 0;
+          font-weight: 600;
+          letter-spacing: 0px;
+          line-height: 1;
+        }
+        .logo-container:hover .logo {
+          color: #9ccc65;
+          transform: scale(1.05);
+          text-shadow: 0 0 10px rgba(139, 195, 74, 0.3);
+        }
+        .logo-container:hover .logo-subtitle {
+          opacity: 1;
+          max-height: 20px;
+          margin-top: 0.2rem;
+          transform: translateY(0) scale(1);
+          animation: subtitleGlow 2s ease-in-out infinite, letterSpacing 0.4s ease-out forwards;
+        }
+
+        .theme-toggle {
+          font-size: 1.3rem;
+          line-height: 1;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          height: 2.5rem;
+          width: 2.5rem;
+          padding: 0;
+          background: rgba(139, 195, 74, 0.1);
+          border: 2px solid rgba(139, 195, 74, 0.2);
+          border-radius: 50%;
+          color: rgba(139, 195, 74, 0.9);
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          box-shadow: 0 4px 12px rgba(139, 195, 74, 0.2);
+          outline: none;
+          cursor: pointer;
+          position: relative;
+          overflow: hidden;
+        }
+
+        .theme-toggle::before {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          background: linear-gradient(45deg, transparent, rgba(139, 195, 74, 0.1), transparent);
+          transform: translateX(-100%);
+          transition: transform 0.6s ease;
+        }
+
+        .theme-toggle:hover::before {
+          transform: translateX(100%);
+        }
+
+        .theme-toggle:hover {
+          background: rgba(139, 195, 74, 0.15);
+          border-color: rgba(139, 195, 74, 0.4);
+          color: #8bc34a;
+          transform: scale(1.1) rotate(10deg);
+          box-shadow: 0 6px 20px rgba(139, 195, 74, 0.3);
+        }
+
+        .theme-toggle:active {
+          transform: scale(0.95) rotate(-5deg);
+          transition: all 0.1s ease;
+        }
+
+        @keyframes themeToggleSpin {
+          0% { transform: rotate(0deg) scale(1); }
+          50% { transform: rotate(180deg) scale(1.1); }
+          100% { transform: rotate(360deg) scale(1); }
+        }
+
+        .theme-toggle.changing {
+          animation: themeToggleSpin 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        main {
+          width: 100vw;
+          min-height: calc(100vh - 7rem);
+          margin: 7rem 0 3rem 0;
+          padding: 0;
+          position: relative;
+          z-index: 2;
+          display: flex;
+          justify-content: center;
+          align-items: flex-start;
+        }
+
+        .form-container {
+          background: rgba(255, 255, 255, 0.08);
+          border-radius: 24px;
+          padding: 3rem;
+          backdrop-filter: blur(20px) saturate(180%);
+          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4),
+                      0 8px 32px rgba(0, 0, 0, 0.2),
+                      0 1px 0 rgba(255, 255, 255, 0.1) inset;
+          border: 1px solid rgba(255, 255, 255, 0.15);
+          animation: fadeIn 1s ease-out, floatAnimation 6s ease-in-out infinite;
+          position: relative;
+          overflow: hidden;
+          width: 90%;
+          max-width: 800px;
+          margin: 2rem auto;
+        }
+
+        .form-container::before {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 2px;
+          background: linear-gradient(90deg, transparent, #8bc34a, transparent);
+          animation: slideIn 2s ease-out;
+        }
+
+        .form-container::after {
+          content: '';
+          position: absolute;
+          top: -50%;
+          left: -50%;
+          width: 200%;
+          height: 200%;
+          background: radial-gradient(circle, rgba(139, 195, 74, 0.03) 0%, transparent 70%);
+          animation: gradientShift 20s ease infinite;
+          pointer-events: none;
+        }
+
+        body.light-mode .form-container {
+          background: rgba(255, 255, 255, 0.95);
+          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.08),
+                      0 8px 32px rgba(0, 0, 0, 0.04),
+                      0 1px 0 rgba(0, 0, 0, 0.05) inset;
+          border: 1px solid rgba(0, 0, 0, 0.08);
+        }
+
+        body.light-mode .form-container::before {
+          background: linear-gradient(90deg, transparent, #8bc34a, transparent);
+        }
+
+        body.light-mode .form-container::after {
+          background: radial-gradient(circle, rgba(139, 195, 74, 0.02) 0%, transparent 70%);
+        }
+
+        .text-center {
+          margin-top: 2rem;
+          text-align: center;
+          color: rgba(255, 255, 255, 0.8);
+          font-size: 0.95rem;
+          line-height: 1.6;
+        }
+
+        body.light-mode .text-center {
+          color: #64748b;
+        }
+
+        .link {
+          color: #8bc34a;
+          text-decoration: none;
+          font-weight: 600;
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          position: relative;
+        }
+
+        .link::after {
+          content: '';
+          position: absolute;
+          bottom: -2px;
+          left: 0;
+          width: 0;
+          height: 2px;
+          background: linear-gradient(90deg, #8bc34a, #9ccc65);
+          transition: width 0.3s ease;
+        }
+
+        .link:hover::after {
+          width: 100%;
+        }
+
+        .link:hover {
+          color: #9ccc65;
+          transform: translateY(-1px);
+        }
+
+        .animate-title {
+          animation: fadeIn 1s ease-out;
+        }
+
+        .animate-text {
+          animation: fadeIn 1s ease-out 0.4s backwards;
+        }
+
+        /* Enhanced responsive design */
+        @media (max-width: 768px) {
+          .header {
+            padding: 1rem 1.5rem;
+          }
+          
+          .logo {
+            font-size: 1.8rem;
+          }
+          
+          main {
+            margin: 6rem auto 2rem;
+            padding: 0 1rem;
+            max-width: 100%;
+          }
+          
+          .form-container {
+            padding: 2rem;
+            border-radius: 20px;
+            margin: 0 auto;
+            max-width: 95%;
+          }
+          
+          .theme-toggle {
+            height: 2.2rem;
+            width: 2.2rem;
+            font-size: 1.1rem;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .header {
+            padding: 0.875rem 1rem;
+          }
+          
+          .logo {
+            font-size: 1.6rem;
+          }
+          
+          main {
+            margin: 5.5rem auto 1.5rem;
+          }
+          
+          .form-container {
+            padding: 1.5rem;
+            border-radius: 16px;
+            margin: 0 auto;
+            max-width: 95%;
+          }
+          
+          .text-center {
+            font-size: 0.9rem;
+            margin-top: 1.5rem;
+          }
+        }
+
+        @media (max-width: 600px) {
+          .header {
+            padding: 0.6rem 0.8rem;
+          }
+          .logo {
+            font-size: 1.3rem;
+          }
+          .theme-toggle {
+            height: 2rem;
+            width: 2rem;
+            font-size: 1rem;
+          }
+        }
+
+        /* Improved accessibility */
+        @media (prefers-reduced-motion: reduce) {
+          *,
+          *::before,
+          *::after {
+            animation-duration: 0.01ms !important;
+            animation-iteration-count: 1 !important;
+            transition-duration: 0.01ms !important;
+          }
+        }
+
+        /* High contrast mode support */
+        @media (prefers-contrast: high) {
+          .form-container {
+            border: 2px solid rgba(255, 255, 255, 0.3);
+          }
+          
+          body.light-mode .form-container {
+            border: 2px solid rgba(0, 0, 0, 0.2);
+          }
+          
+          .logo {
+            text-shadow: none;
+          }
+        }
+        
+        /* Fix light mode text colors */
+        body.light-mode {
+          color: #2d3748 !important;
+        }
+        body.light-mode .glass-container {
+          color: #2d3748 !important;
+        }
+        body.light-mode .glass-container *,
+        body.light-mode .glass-container h2,
+        body.light-mode .glass-container h3,
+        body.light-mode .glass-container p,
+        body.light-mode .glass-container label,
+        body.light-mode .glass-container div {
+          color: #2d3748 !important;
+        }
+        body.light-mode .glass-container input,
+        body.light-mode .glass-container select,
+        body.light-mode .glass-container textarea {
+          color: #2d3748 !important;
+          background: rgba(255, 255, 255, 0.8) !important;
+        }
+        body.light-mode .glass-container input::placeholder,
+        body.light-mode .glass-container textarea::placeholder {
+          color: #718096 !important;
+        }
+      </style>
+    </body>
+  </html>
