@@ -31,6 +31,8 @@ interface CompleteProfileForm {
   second_last_name: string;
   semester: string;
   birthdate: string;
+  school: string;
+  grade: string;
   subjects: SubjectRow[];
 }
 
@@ -61,6 +63,8 @@ export default function CompleteProfileForm() {
     second_last_name: '',
     semester: '',
     birthdate: '',
+    school: '',
+    grade: '',
     subjects: [...initialSubjects],
   });
   const [errors, setErrors] = useState<FormErrors>({});
@@ -290,6 +294,28 @@ export default function CompleteProfileForm() {
                 placeholder="DD/MM/AAAA"
                 value={form.birthdate}
                 onChangeText={(text) => handleChange('birthdate', text)}
+                style={isDarkTheme ? styles.inputDark : styles.inputLight}
+                placeholderTextColor={isDarkTheme ? '#aaa' : '#888'}
+              />
+            </View>
+          </View>
+          <View style={styles.row}>
+            <View style={styles.halfInputGroup}>
+              <Text style={isDarkTheme ? styles.labelDark : styles.labelLight}>Escuela</Text>
+              <TextInput
+                placeholder="Nombre de la escuela"
+                value={form.school}
+                onChangeText={(text) => handleChange('school', text)}
+                style={isDarkTheme ? styles.inputDark : styles.inputLight}
+                placeholderTextColor={isDarkTheme ? '#aaa' : '#888'}
+              />
+            </View>
+            <View style={styles.halfInputGroup}>
+              <Text style={isDarkTheme ? styles.labelDark : styles.labelLight}>Grado</Text>
+              <TextInput
+                placeholder="Ej. 1ro"
+                value={form.grade}
+                onChangeText={(text) => handleChange('grade', text)}
                 style={isDarkTheme ? styles.inputDark : styles.inputLight}
                 placeholderTextColor={isDarkTheme ? '#aaa' : '#888'}
               />

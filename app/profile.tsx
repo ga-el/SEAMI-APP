@@ -161,6 +161,9 @@ export default function ProfileScreen() {
     </View>
   ))}
 </View>
+<TouchableOpacity style={{ marginTop: 12, alignSelf: 'flex-start' }} onPress={() => router.push('/student-subjects')}>
+  <Text style={{ color: isDarkTheme ? '#8bc34a' : '#6aab3b', fontWeight: 'bold', fontSize: 16 }}>Ver Detalles y Videos ➜</Text>
+</TouchableOpacity>
               </View>
             </View>
             <View style={styles.divider} />
@@ -255,8 +258,7 @@ const styles = StyleSheet.create({
   userInfo: {
     marginBottom: 8,
   },
-  // infoItem definido una sola vez para evitar duplicados
-infoItem: {
+  infoItem: {
     marginBottom: 16,
   },
   infoLabel: {
@@ -458,10 +460,7 @@ infoItem: {
   userInfoContainer: {
     marginBottom: 24,
   },
-  // infoItem definido una sola vez para evitar duplicados
-infoItem: {
-    marginBottom: 16,
-  },
+  // removed infoItem
   labelDark: {
     fontSize: 16,
     color: '#e2e8f0',

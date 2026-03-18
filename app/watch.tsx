@@ -20,7 +20,7 @@ import { Ionicons } from '@expo/vector-icons';
 import CommentsSection from '../components/CommentsSection';
 import { db, auth } from '../firebase-config';
 import { ThemeContext } from './_layout';
-import { formatTimeAgo } from '../utils/dateUtils';
+import { formatTimeAgo, formatDuration } from '../utils/dateUtils';
 
 // --- Componente Principal del Reproductor ---
 export default function WatchScreen() {
@@ -165,7 +165,8 @@ export default function WatchScreen() {
             return {
               id: docu.id,
               ...data,
-              time: formatTimeAgo(data.createdAt ? (data.createdAt.toDate ? data.createdAt.toDate() : new Date(data.createdAt)) : new Date())
+              time: formatTimeAgo(data.createdAt ? (data.createdAt.toDate ? data.createdAt.toDate() : new Date(data.createdAt)) : new Date()),
+              duration: formatDuration(data.duration)
             };
           });
         setRecommendations(otherVideos.slice(0, 5)); // Limitar a 5 recomendaciones

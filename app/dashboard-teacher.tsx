@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import BottomNav from '../components/BottomNav';
 import { initializeFirebase } from '../firebase-config';
 import { ThemeContext } from './_layout';
-import { formatTimeAgo } from '../utils/dateUtils';
+import { formatTimeAgo, formatDuration } from '../utils/dateUtils';
 const { auth, db } = initializeFirebase();
 
 const INITIAL_LOAD_LIMIT = 20;
@@ -62,7 +62,7 @@ export default function DashboardScreen() {
             : new Date(data.createdAt)
           : new Date()
       ),
-      duration: data.duration || '0:00',
+      duration: formatDuration(data.duration),
       thumbnailUrl: data.thumbnailUrl || null,
     };
   }

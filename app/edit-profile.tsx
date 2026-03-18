@@ -47,6 +47,8 @@ export default function EditProfileScreen() {
     second_last_name: '',
     semester: '',
     birthdate: '',
+    school: '',
+    grade: '',
     subjects: [{ subject: '', teacher: '' }],
   });
   
@@ -97,6 +99,8 @@ export default function EditProfileScreen() {
                 second_last_name: data.second_last_name || data.apellido_materno || '',
                 semester: data.semester ? String(data.semester) : (data.semestre ? String(data.semestre) : ''),
                 birthdate: data.birthdate || data.fecha_nacimiento || '',
+                school: data.school || data.escuela || '',
+                grade: data.grade || data.grado || '',
                 subjects: [] as Array<{subject: string, teacher: string}>
               };
               
@@ -133,6 +137,8 @@ export default function EditProfileScreen() {
                 second_last_name: nameParts.slice(2).join(' ') || '',
                 semester: '',
                 birthdate: '',
+                school: '',
+                grade: '',
                 subjects: [{ subject: '', teacher: '' }],
               };
               
@@ -159,6 +165,8 @@ export default function EditProfileScreen() {
               second_last_name: '',
               semester: '',
               birthdate: '',
+              school: '',
+              grade: '',
               subjects: [{ subject: '', teacher: '' }],
             });
             setProfilePhoto(user.photoURL || DEFAULT_PHOTO);
@@ -288,6 +296,8 @@ export default function EditProfileScreen() {
         second_last_name: form.second_last_name,
         semester: form.semester,
         birthdate: form.birthdate,
+        school: form.school,
+        grade: form.grade,
         subjects: form.subjects.filter(s => s.subject.trim() || s.teacher.trim()),
         avatarUrl: profilePhoto !== DEFAULT_PHOTO ? profilePhoto : null,
         updatedAt: new Date(),
@@ -425,6 +435,34 @@ export default function EditProfileScreen() {
               placeholder="DD/MM/AAAA"
               placeholderTextColor={isDarkTheme ? '#aaa' : '#666'}
             />
+          </View>
+
+          <View style={styles.nameRow}>
+            <View style={styles.halfInputGroup}>
+              <Text style={[styles.label, isDarkTheme ? styles.labelDark : styles.labelLight]}>
+                Escuela
+              </Text>
+              <TextInput
+                style={[styles.input, isDarkTheme ? styles.inputDark : styles.inputLight]}
+                value={form.school}
+                onChangeText={(text) => handleChange('school', text)}
+                placeholder="Nombre de la escuela"
+                placeholderTextColor={isDarkTheme ? '#aaa' : '#666'}
+              />
+            </View>
+            
+            <View style={styles.halfInputGroup}>
+              <Text style={[styles.label, isDarkTheme ? styles.labelDark : styles.labelLight]}>
+                Grado
+              </Text>
+              <TextInput
+                style={[styles.input, isDarkTheme ? styles.inputDark : styles.inputLight]}
+                value={form.grade}
+                onChangeText={(text) => handleChange('grade', text)}
+                placeholder="Ej. 1ro"
+                placeholderTextColor={isDarkTheme ? '#aaa' : '#666'}
+              />
+            </View>
           </View>
 
           <View style={styles.formGroup}>

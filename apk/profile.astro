@@ -1,0 +1,545 @@
+---
+// src/pages/profile.astro
+import MainLayout from '../layouts/MainLayout.astro';
+---
+
+<MainLayout>
+  <div class="dark-mode">
+    <html lang="es">
+      <head>
+        <meta charset="UTF-8" />
+        <title>SEAMI - Mi Perfil</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      </head>
+
+      <body>
+        <!-- Header -->
+        <header class="header">
+          <a href="/dashboard" class="logo-container">
+            <span class="logo">SEAMI</span>
+            <span class="logo-subtitle">SISTEMA EDUCATIVO MULTIMEDIA E INTERACTIVO</span>
+          </a>
+          <button id="toggle-theme" class="theme-toggle">🌙</button>
+        </header>
+
+        <!-- Contenido Principal -->
+        <main style="padding: 5rem;">
+          <section class="glass-container profile-card">
+            <!-- Avatar y nombre -->
+            <div class="profile-header">
+              <div class="avatar-container">
+                <img id="profile-avatar" src="/im/avatar_default.webp" alt="Avatar" class="avatar" onerror="this.style.display='none';document.getElementById('avatar-fallback').style.display='flex';" />
+                <div class="avatar-fallback" style="display:none;align-items:center;justify-content:center;font-size:2rem;font-weight:bold;background:#8bc34a;color:#fff;width:90px;height:90px;border-radius:50%;" id="avatar-fallback">--</div>
+              </div>
+              <div class="profile-title">
+                <h2 id="profile-name">Nombre Apellido</h2>
+                <span class="profile-email" id="profile-email">correo@ejemplo.com</span>
+              </div>
+            </div>
+
+            <hr class="divider" />
+
+            <!-- Información del usuario -->
+            <div class="user-info">
+              <div class="info-item">
+                <strong>Semestre:</strong> <span id="profile-semester">-</span>
+              </div>
+              <div class="info-item">
+                <strong>Materias Asignadas:</strong>
+                <div class="profile-table-container">
+                  <table class="profile-table">
+                    <thead>
+                      <tr>
+                        <th>Materia</th>
+                        <th>Profesor</th>
+                      </tr>
+                    </thead>
+                    <tbody id="profile-subjects">
+                      <tr><td class="subject-name">-</td><td class="subject-teacher"></td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <hr class="divider" />
+
+            <!-- Botones adicionales -->
+            <div class="profile-actions">
+              <a href="edit-profile" class="action-link"><button class="action-btn edit"><span class="icon"><svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#fff"><path d="M200-200h57l391-391-57-57-391 391v57Zm-80 80v-170l528-527q12-11 26.5-17t30.5-6q16 0 31 6t26 18l55 56q12 11 17.5 26t5.5 30q0 16-5.5 30.5T817-647L290-120H120Zm640-584-56-56 56 56Zm-141 85-28-29 57 57-29-28Z"/></svg></span> Editar Perfil</button></a>
+              <button class="action-btn logout" id="logout-btn"><span class="icon"><svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#fff"><path d="M200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h280v80H200v560h280v80H200Zm440-160-55-58 102-102H360v-80h327L585-622l55-58 200 200-200 200Z"/></svg></span> Cerrar Sesión</button>
+            </div>
+          </section>
+        </main>
+
+        <!-- Script para modo oscuro y para cargar datos del usuario -->
+        <script is:inline>
+          document.addEventListener('DOMContentLoaded', async () => {
+            // --- Modo oscuro ---
+            const toggleBtn = document.getElementById('toggle-theme');
+            const body = document.querySelector('.dark-mode');
+            function applyTheme(isDark) {
+              if (!toggleBtn || !body) return;
+              toggleBtn.classList.add("changing");
+              body.classList.toggle("light-mode", !isDark);
+              toggleBtn.textContent = isDark ? "🌙" : "☀️";
+              localStorage.setItem("theme", isDark ? "dark" : "light");
+              setTimeout(() => {
+                toggleBtn.classList.remove("changing");
+              }, 500);
+            }
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme === 'light') {
+              applyTheme(false);
+            } else {
+              applyTheme(true);
+            }
+            if (toggleBtn) {
+              toggleBtn.addEventListener('click', () => {
+                const isDark = !body.classList.contains("light-mode");
+                applyTheme(!isDark);
+              });
+            }
+
+            // --- Cargar datos del usuario desde Firebase ---
+            try {
+              const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js');
+              const { getAuth, onAuthStateChanged, signOut } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js');
+              const { getFirestore, doc, getDoc } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js');
+              const firebaseConfig = {
+                apiKey: "AIzaSyBsfou4dclJAJeX-rigz3QHA-mJ0zjh-FI",
+                authDomain: "seami-25.firebaseapp.com",
+                projectId: "seami-25",
+                storageBucket: "seami-25.firebasestorage.app",
+                messagingSenderId: "345080770100",
+                appId: "1:345080770100:web:cc49649cd2d0bef037a461"
+              };
+              const app = initializeApp(firebaseConfig);
+              const auth = getAuth(app);
+              const db = getFirestore(app);
+
+              onAuthStateChanged(auth, async (user) => {
+                if (!user) {
+                  window.location.href = '/login';
+                  return;
+                }
+                // Rellenar nombre, correo y avatar
+                document.getElementById('profile-email').textContent = user.email || '-';
+                // Iniciales para fallback
+                const initials = user.displayName ? user.displayName.split(' ').map(n => n[0]).join('').toUpperCase() : (user.email ? user.email[0].toUpperCase() : '--');
+                document.getElementById('avatar-fallback').textContent = initials;
+
+                // Obtener datos extra de Firestore
+                const userDoc = await getDoc(doc(db, 'users', user.uid));
+                if (userDoc.exists()) {
+                  const data = userDoc.data();
+                  document.getElementById('profile-name').textContent = data.nombre || user.displayName || 'Sin nombre';
+                  document.getElementById('profile-semester').textContent = data.semestre || '-';
+                  // Materias
+                  const subjectsList = document.getElementById('profile-subjects');
+                  subjectsList.innerHTML = '';
+                  if (Array.isArray(data.materias) && data.materias.length > 0) {
+                    data.materias.forEach(m => {
+                      const tr = document.createElement('tr');
+                      tr.innerHTML = `<td class='subject-name'>${m.nombre || '-'}</td><td class='subject-teacher'>${m.profesor ? 'Prof. ' + m.profesor : ''}</td>`;
+                      subjectsList.appendChild(tr);
+                    });
+                  } else {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `<td class='subject-name'>-</td><td class='subject-teacher'></td>`;
+                    subjectsList.appendChild(tr);
+                  }
+                  // Avatar personalizado si existe
+                  if (data.avatarUrl) {
+                    const avatarImg = document.getElementById('profile-avatar');
+                    avatarImg.src = data.avatarUrl;
+                    avatarImg.style.display = 'block';
+                    document.getElementById('avatar-fallback').style.display = 'none';
+                  } else {
+                    document.getElementById('profile-avatar').style.display = 'none';
+                    document.getElementById('avatar-fallback').style.display = 'flex';
+                  }
+                } else {
+                  document.getElementById('profile-name').textContent = user.displayName || 'Sin nombre';
+                  document.getElementById('profile-semester').textContent = '-';
+                  document.getElementById('profile-subjects').innerHTML = '<li>-</li>';
+                }
+              });
+
+              // Logout
+              document.getElementById('logout-btn').addEventListener('click', async () => {
+                await signOut(auth);
+                window.location.href = '/login';
+              });
+            } catch (e) {
+              alert('Error al cargar datos de usuario.');
+            }
+          });
+        </script>
+
+        <style>
+          * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: "Segoe UI", sans-serif;
+          }
+
+          @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+          }
+          @keyframes slideIn {
+            from { opacity: 0; transform: translateX(-50px); }
+            to { opacity: 1; transform: translateX(0); }
+          }
+          @keyframes zenPulse {
+            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(139, 195, 74, 0.7); }
+            70% { transform: scale(1.05); box-shadow: 0 0 0 10px rgba(139, 195, 74, 0); }
+            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(139, 195, 74, 0); }
+          }
+          @keyframes zenGlow {
+            0%, 100% { box-shadow: 0 0 5px rgba(139, 195, 74, 0.5); }
+            50% { box-shadow: 0 0 20px rgba(139, 195, 74, 0.8), 0 0 30px rgba(139, 195, 74, 0.4); }
+          }
+          .dark-mode {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(to right bottom, #0f172a, #3a2443);
+            color: white;
+            transition: all 0.4s ease;
+            animation: fadeIn 0.8s ease-out;
+          }
+          .dark-mode.light-mode {
+            background: linear-gradient(135deg, #f5f7fa 0%, #e4e8f0 100%);
+            color: #2d3748;
+          }
+          .header {
+            position: fixed;
+            top: 0;
+            width: 100%;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background-color: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(10px);
+            padding: 0.8rem 2rem;
+            color: white;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+            transition: all 0.3s ease;
+          }
+          .light-mode .header {
+            background-color: rgba(255, 255, 255, 0.95);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+            color: #0f172a;
+          }
+          @keyframes subtitleGlow {
+            0%, 100% {
+              text-shadow: 0 0 8px rgba(139, 195, 74, 0.6);
+            }
+            50% {
+              text-shadow: 0 0 15px rgba(139, 195, 74, 0.9), 0 0 25px rgba(139, 195, 74, 0.5);
+            }
+          }
+          @keyframes letterSpacing {
+            0% {
+              letter-spacing: 0px;
+            }
+            100% {
+              letter-spacing: 2px;
+            }
+          }
+          .logo-container {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            text-decoration: none;
+            cursor: pointer;
+            min-height: 40px;
+          }
+          .logo {
+            font-size: 1.7rem;
+            font-weight: bold;
+            color: #8bc34a;
+            transition: all 0.3s ease;
+            line-height: 1;
+          }
+          .logo-subtitle {
+            font-size: 0.65rem;
+            color: #8bc34a;
+            opacity: 0;
+            max-height: 0;
+            overflow: hidden;
+            transform: translateY(-8px) scale(0.9);
+            transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            white-space: nowrap;
+            margin-top: 0;
+            font-weight: 600;
+            letter-spacing: 0px;
+            line-height: 1;
+          }
+          .logo-container:hover .logo {
+            color: #9ccc65;
+            transform: scale(1.05);
+            text-shadow: 0 0 10px rgba(139, 195, 74, 0.3);
+          }
+          .logo-container:hover .logo-subtitle {
+            opacity: 1;
+            max-height: 20px;
+            margin-top: 0.2rem;
+            transform: translateY(0) scale(1);
+            animation: subtitleGlow 2s ease-in-out infinite, letterSpacing 0.4s ease-out forwards;
+          }
+          .theme-toggle {
+            font-size: 1.2rem;
+            line-height: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 2.2rem;
+            width: 2.2rem;
+            padding: 0;
+            background: transparent;
+            border: none;
+            border-radius: 50%;
+            color: rgba(100, 181, 246, 0.7);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: none;
+            outline: none;
+            opacity: 0.85;
+            transform-origin: center;
+          }
+          .theme-toggle:hover {
+            background: rgba(100, 181, 246, 0.08);
+            color: rgba(100, 181, 246, 1);
+            transform: scale(1.08) rotate(5deg);
+            opacity: 1;
+          }
+          .theme-toggle:active {
+            transform: scale(0.95) rotate(-10deg);
+            transition: all 0.1s ease;
+          }
+          @keyframes themeToggleSpin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+          .theme-toggle.changing {
+            animation: themeToggleSpin 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+          }
+          .glass-container.profile-card {
+            padding: 2.5rem 2rem 2rem 2rem;
+            max-width: 420px;
+            margin: 0 auto;
+            border-radius: 2rem;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.35);
+            background: rgba(255,255,255,0.08);
+            border: 1.5px solid rgba(255,255,255,0.18);
+            position: relative;
+          }
+          .light-mode .glass-container.profile-card {
+            background: rgba(255, 255, 255, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            backdrop-filter: blur(10px);
+          }
+          .profile-header {
+            display: flex;
+            align-items: center;
+            gap: 1.2rem;
+            margin-bottom: 1.2rem;
+          }
+          .avatar-container {
+            flex-shrink: 0;
+            position: relative;
+            width: 80px;
+            height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          }
+          .avatar {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 3px solid #8bc34a;
+            background: #fff;
+            box-shadow: 0 2px 8px rgba(139,195,74,0.15);
+            display: block;
+          }
+          .avatar-fallback {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #8bc34a 60%, #50315c 100%);
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            font-weight: bold;
+            border: 3px solid #8bc34a;
+            box-shadow: 0 2px 8px rgba(139,195,74,0.15);
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+          }
+          .profile-title {
+            display: flex;
+            flex-direction: column;
+          }
+          .profile-title h2 {
+            font-size: 1.5rem;
+            margin-bottom: 0.2rem;
+            color: #8bc34a;
+            font-weight: bold;
+          }
+          .profile-email {
+            font-size: 1rem;
+            color: #b0b0b0;
+          }
+          .divider {
+            border: none;
+            border-top: 1.5px solid rgba(139,195,74,0.18);
+            margin: 1.2rem 0;
+          }
+          .user-info {
+            margin-bottom: 0.5rem;
+            text-align: left;
+          }
+          .info-item {
+            margin-bottom: 1.1rem;
+            font-size: 1.05rem;
+          }
+          .profile-table-container {
+            width: 100%;
+            margin-top: 0.7rem;
+            border-radius: 1.2rem;
+            overflow: hidden;
+            box-shadow: 0 2px 16px rgba(139,195,74,0.10);
+            background: rgba(44,62,80,0.13);
+          }
+          .profile-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+          }
+          .profile-table th, .profile-table td {
+            padding: 1rem 1.2rem;
+          }
+          .profile-table th {
+            background: linear-gradient(90deg, #50315c 0%, #8bc34a 100%);
+            color: #fff;
+            font-size: 1.08rem;
+            font-weight: 700;
+            text-align: left;
+            border-bottom: 2.5px solid #8bc34a;
+          }
+          .profile-table tr {
+            transition: background 0.18s;
+          }
+          .profile-table tr:nth-child(even) {
+            background: rgba(139,195,74,0.08);
+          }
+          .profile-table tr:nth-child(odd) {
+            background: rgba(80,49,92,0.10);
+          }
+          .profile-table tr:hover {
+            background: rgba(139,195,74,0.18);
+          }
+          .profile-table td {
+            font-size: 1.08rem;
+            color: #fff;
+            vertical-align: middle;
+          }
+          .profile-table .subject-name {
+            font-weight: bold;
+            font-size: 1.15rem;
+            color: #fff;
+          }
+          .profile-table .subject-teacher {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4em;
+            background: linear-gradient(90deg, #8bc34a 60%, #6aab3b 100%);
+            color: #fff;
+            font-size: 1.01em;
+            font-weight: 600;
+            border-radius: 1.2em;
+            padding: 0.32em 1.1em 0.32em 0.7em;
+            box-shadow: 0 1px 6px rgba(139,195,74,0.10);
+            min-width: 110px;
+          }
+          .profile-table .teacher-icon {
+            font-size: 1.1em;
+            margin-right: 0.2em;
+            opacity: 0.85;
+          }
+          @media (max-width: 600px) {
+            .profile-table-container { margin-top: 0.3rem; }
+            .profile-table th, .profile-table td { padding: 0.7rem 0.5rem; font-size: 0.98rem; }
+            .profile-table .subject-name { font-size: 1rem; }
+            .profile-table .subject-teacher { min-width: unset; width: 100%; justify-content: flex-start; margin-top: 0.2em; }
+          }
+          .profile-actions {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            margin-top: 1.2rem;
+          }
+          .action-link { text-decoration: none; }
+          .action-btn {
+            padding: 0.7rem 1.3rem;
+            background: linear-gradient(90deg, #8bc34a 60%, #50315c 100%);
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1.05rem;
+            font-weight: 500;
+            box-shadow: 0 2px 8px rgba(139,195,74,0.10);
+            display: flex;
+            align-items: center;
+            gap: 0.5em;
+            transition: background 0.3s, color 0.3s, transform 0.2s;
+          }
+          .action-btn.edit {
+            background: linear-gradient(90deg, #8bc34a 60%, #6aab3b 100%);
+          }
+          .action-btn.logout {
+            background: linear-gradient(90deg, #50315c 60%, #8bc34a 100%);
+          }
+          .action-btn:hover {
+            background: #fff;
+            color: #50315c;
+            transform: scale(1.04);
+          }
+          .icon { font-size: 1.2em; }
+          .icon svg { vertical-align: -0.125em; height: 1em; width: 1em; display: inline-block; }
+          @media (max-width: 600px) {
+            .glass-container.profile-card { padding: 1.2rem 0.5rem; }
+            .profile-header { flex-direction: column; gap: 0.5rem; }
+            .header {
+              padding: 0.6rem 0.8rem;
+            }
+            .logo {
+              font-size: 1.3rem;
+            }
+            .theme-toggle {
+              height: 2rem;
+              width: 2rem;
+              font-size: 1rem;
+            }
+          }
+        </style>
+        <style>
+          @keyframes spin { 0% { transform: rotate(0deg);} 100% { transform: rotate(360deg);} }
+        </style>
+      </body>
+    </html>
+  </div>
+</MainLayout>

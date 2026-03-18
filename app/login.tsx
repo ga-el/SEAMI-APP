@@ -18,8 +18,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemeContext } from './_layout';
 
 // Importa la inicialización de Firebase centralizada
-import { Auth, signInWithEmailAndPassword } from 'firebase/auth';
+import { Auth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, Firestore, getDoc } from 'firebase/firestore';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { initializeFirebase } from '../firebase-config';
 
 const LoginScreen = () => {
@@ -34,15 +35,59 @@ const LoginScreen = () => {
   const [firebaseError, setFirebaseError] = useState(''); // Para errores de Firebase
   const [auth, setAuth] = useState<Auth | null>(null);
   const [db, setDb] = useState<Firestore | null>(null);
+  const [keepSignedIn, setKeepSignedIn] = useState(true);
+  const [checkingAuth, setCheckingAuth] = useState(true);
 
   // Removed automatic redirect listener to prevent conflicts with role-based navigation
 
   useEffect(() => {
+    let unsubscribe: () => void;
+
     (async () => {
       const firebase = await initializeFirebase();
       setAuth(firebase.auth);
       setDb(firebase.db);
+
+      try {
+        const keep = await AsyncStorage.getItem('keepSignedIn');
+        if (keep !== null) {
+          setKeepSignedIn(keep === 'true');
+        }
+
+        if (keep === 'true' || keep === null) {
+          // Si quiere mantener la sesión, escuchamos cambios
+          unsubscribe = onAuthStateChanged(firebase.auth, async (user) => {
+            if (user) {
+              const userDoc = await getDoc(doc(firebase.db, "users", user.uid));
+              if (userDoc.exists()) {
+                const userData = userDoc.data();
+                if (userData.perfilCompleto) {
+                  router.replace(userData.role === 'profesor' ? '/dashboard-teacher' : '/dashboard');
+                } else {
+                  router.replace(userData.role === 'profesor' ? '/complete-profile-teacher' : '/complete-profile');
+                }
+              } else {
+                router.replace('/register');
+              }
+            } else {
+              setCheckingAuth(false);
+            }
+          });
+        } else {
+          // Si no quiere mantener sesión, y está logueado en Firebase de antes
+          if (firebase.auth.currentUser) {
+            await signOut(firebase.auth);
+          }
+          setCheckingAuth(false);
+        }
+      } catch (error) {
+        setCheckingAuth(false);
+      }
     })();
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
   }, []);
 
   const handleEmailChange = (text) => {
@@ -104,6 +149,9 @@ const LoginScreen = () => {
       setFirebaseError(''); // Limpiar errores previos
       
       try {
+        // Guardar la preferencia
+        await AsyncStorage.setItem('keepSignedIn', keepSignedIn ? 'true' : 'false');
+
         // Iniciar sesión con Firebase Authentication
         const userCredential = await signInWithEmailAndPassword(
           auth, 
@@ -153,6 +201,14 @@ const LoginScreen = () => {
       }
     }
   };
+
+  if (checkingAuth) {
+    return (
+      <SafeAreaView style={[isDarkTheme ? styles.containerDark : styles.containerLight, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color="#8bc34a" />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={isDarkTheme ? styles.containerDark : styles.containerLight}>
@@ -218,6 +274,21 @@ const LoginScreen = () => {
             </View>
             {passwordError ? <Text style={styles.errorText}>{passwordError}</Text> : null}
           </View>
+
+          <TouchableOpacity 
+            style={styles.checkboxContainer} 
+            onPress={() => setKeepSignedIn(!keepSignedIn)}
+            disabled={loading}
+          >
+            <Ionicons 
+              name={keepSignedIn ? "checkbox" : "square-outline"} 
+              size={24} 
+              color="#8bc34a" 
+            />
+            <Text style={isDarkTheme ? styles.checkboxLabelDark : styles.checkboxLabelLight}>
+              Mantener sesión iniciada
+            </Text>
+          </TouchableOpacity>
           
           <TouchableOpacity
             style={[
@@ -524,5 +595,21 @@ const styles = StyleSheet.create({
     padding: 10,
     backgroundColor: 'rgba(239, 68, 68, 0.1)',
     borderRadius: 8,
+  },
+  checkboxContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    marginLeft: 4,
+  },
+  checkboxLabelDark: {
+    color: '#e2e8f0',
+    fontSize: 14,
+    marginLeft: 8,
+  },
+  checkboxLabelLight: {
+    color: '#475569',
+    fontSize: 14,
+    marginLeft: 8,
   },
 });

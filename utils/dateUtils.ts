@@ -29,3 +29,30 @@ export const formatTimeAgo = (date: Date): string => {
   const years = Math.floor(diffDays / 365);
   return `hace ${years} año${years > 1 ? 's' : ''}`;
 };
+
+/**
+ * Formats seconds into a human-readable duration string (e.g., "16:27", "1:05:30").
+ * @param seconds The duration in seconds (can be a number or string).
+ * @returns A formatted duration string.
+ */
+export const formatDuration = (seconds: number | string | null | undefined): string => {
+  if (seconds === null || seconds === undefined || seconds === '') return '0:00';
+
+  // If it's already a formatted string like "H:MM:SS" or "MM:SS", return it.
+  if (typeof seconds === 'string' && seconds.includes(':')) return seconds;
+
+  const totalSeconds = typeof seconds === 'string' ? parseInt(seconds, 10) : seconds;
+  if (isNaN(totalSeconds)) return '0:00';
+
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const secs = totalSeconds % 60;
+
+  const paddedMinutes = hours > 0 ? minutes.toString().padStart(2, '0') : minutes.toString();
+  const paddedSeconds = secs.toString().padStart(2, '0');
+
+  if (hours > 0) {
+    return `${hours}:${paddedMinutes}:${paddedSeconds}`;
+  }
+  return `${paddedMinutes}:${paddedSeconds}`;
+};
